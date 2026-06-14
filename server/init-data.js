@@ -244,6 +244,114 @@ function seedData() {
   favorites.forEach(f => insertFav.run(f.user_id, f.plan_id));
   console.log(`✅ 已创建 ${favorites.length} 条收藏记录`);
 
+  const noteIds = db.prepare('SELECT id, author_id, plan_id FROM route_notes').all();
+  
+  const comments = [];
+  for (let i = 0; i < noteIds.length; i++) {
+    const note = noteIds[i];
+    const commenterIds = userIds.filter(id => id !== note.author_id);
+    const shuffled = commenterIds.sort(() => 0.5 - Math.random());
+    
+    const commentCount = Math.floor(Math.random() * 3) + 1;
+    for (let j = 0; j < commentCount; j++) {
+      const commenterId = shuffled[j % shuffled.length];
+      const commentContents = [
+        '这个地方真的很有特色，下次一定要去看看！',
+        '写得太棒了，仿佛身临其境～',
+        '请问这家店的具体位置在哪里呀？',
+        '上次去没找到，原来藏在这里！',
+        '楼主拍照技术也太好了吧',
+        '这个角度很有感觉，收藏了！',
+        '周末就去打卡，感谢分享～'
+      ];
+      
+      comments.push({
+        note_id: note.id,
+        author_id: commenterId,
+        content: commentContents[Math.floor(Math.random() * commentContents.length)],
+        parent_id: null,
+        root_id: null,
+        reply_to_user_id: null
+      });
+    }
+  }
+
+  const insertComment = db.prepare(`
+    INSERT INTO note_comments (note_id, author_id, content, parent_id, root_id, reply_to_user_id)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+
+  comments.forEach(c => {
+    const result = insertComment.run(
+      c.note_id, c.author_id, c.content, c.parent_id, c.root_id, c.reply_to_user_id
+    );
+    const commentId = result.lastInsertRowid;
+    db.prepare('UPDATE note_comments SET root_id = ? WHERE id = ?').run(commentId, commentId);
+  });
+
+  const allComments = db.prepare('SELECT * FROM note_comments').all();
+  for (let i = 0; i < 3; i++) {
+    const parentComment = allComments[Math.floor(Math.random() * allComments.length)];
+    const replyContents = [
+      '同意！我也这么觉得',
+      '同问同问，有人知道吗？',
+      '哈哈哈哈上次我也遇到了',
+      '这个回复太精辟了'
+    ];
+    const replierId = userIds.filter(id => id !== parentComment.author_id)[Math.floor(Math.random() * (userIds.length - 1))];
+    
+    const stmt = db.prepare(`
+      INSERT INTO note_comments (note_id, author_id, content, parent_id, root_id, reply_to_user_id)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    stmt.run(
+      parentComment.note_id, replierId,
+      replyContents[Math.floor(Math.random() * replyContents.length)],
+      parentComment.id, parentComment.root_id, parentComment.author_id
+    );
+  }
+
+  console.log(`✅ 已创建 ${comments.length + 3} 条评论`);
+
+  const notifications = [];
+  for (let i = 0; i < noteIds.length; i++) {
+    const note = noteIds[i];
+    const noteComments = db.prepare('SELECT * FROM note_comments WHERE note_id = ?').all(note.id);
+    noteComments.forEach(c => {
+      if (c.author_id !== note.author_id) {
+        notifications.push({
+          user_id: note.author_id,
+          type: 'note_comment',
+          content: c.content,
+          related_id: note.id,
+          related_type: 'note',
+          from_user_id: c.author_id,
+          is_read: Math.random() > 0.5 ? 1 : 0
+        });
+      }
+      if (c.reply_to_user_id && c.reply_to_user_id !== note.author_id) {
+        notifications.push({
+          user_id: c.reply_to_user_id,
+          type: 'comment_reply',
+          content: c.content,
+          related_id: c.id,
+          related_type: 'comment',
+          from_user_id: c.author_id,
+          is_read: Math.random() > 0.5 ? 1 : 0
+        });
+      }
+    });
+  }
+
+  const insertNotif = db.prepare(`
+    INSERT INTO user_notifications (user_id, type, content, related_id, related_type, from_user_id, is_read)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+  notifications.forEach(n => {
+    insertNotif.run(n.user_id, n.type, n.content, n.related_id, n.related_type, n.from_user_id, n.is_read);
+  });
+  console.log(`✅ 已创建 ${notifications.length} 条通知`);
+
   console.log('\n🎉 数据初始化完成！');
   console.log('\n📋 默认用户账号：');
   users.forEach((u, i) => {

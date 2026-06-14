@@ -5,6 +5,10 @@ let currentThemeFilter = '';
 let currentCityFilter = '';
 let currentKeyword = '';
 let favoriteIds = new Set();
+let currentNoteComments = [];
+let currentDiscussionNoteId = null;
+let replyingToCommentId = null;
+let replyingToUserName = '';
 
 const avatarPool = ['🧑', '👩', '👨', '👧', '👦', '🧔', '👵', '👴', '🧑‍🎨', '👨‍🍳', '👩‍💻', '🧑‍🚀', '🎨', '📷', '🎭', '🎵'];
 
@@ -79,9 +83,11 @@ function loadUser() {
 function logout() {
   localStorage.removeItem('citywalk_user');
   currentUser = null;
+  stopNotificationCheck();
   document.getElementById('mainApp').classList.add('hidden');
   document.getElementById('loginModal').classList.remove('hidden');
   document.getElementById('loginUsername').value = '';
+  updateNotificationBadge(0);
 }
 
 function showMainApp() {
@@ -446,6 +452,9 @@ async function openPlanDetail(planId) {
 
   const notesHtml = (plan.notes && plan.notes.length > 0) ? plan.notes.map(n => {
     const isMyNote = n.author_id === currentUser?.id;
+    const commentsCount = n.comments_count || 0;
+    const latestComments = n.latest_comments || [];
+    
     return `
       <div class="note-card" data-note-id="${n.id}">
         <div class="note-header">
@@ -455,18 +464,36 @@ async function openPlanDetail(planId) {
           </div>
           <div class="note-actions">
             ${isMyNote ? `
-              <button class="note-action-btn" onclick="editNote(${n.id}, '${n.title.replace(/'/g, "\\'")}', '${(n.content || '').replace(/'/g, "\\'")}', '${(n.location || '').replace(/'/g, "\\'")}')">✏️ 编辑</button>
-              <button class="note-action-btn" onclick="deleteNote(${n.id})">🗑️ 删除</button>
+              <button class="note-action-btn" onclick="event.stopPropagation(); editNote(${n.id}, '${n.title.replace(/'/g, "\\'")}', '${(n.content || '').replace(/'/g, "\\'")}', '${(n.location || '').replace(/'/g, "\\'")}')">✏️ 编辑</button>
+              <button class="note-action-btn" onclick="event.stopPropagation(); deleteNote(${n.id})">🗑️ 删除</button>
             ` : ''}
           </div>
         </div>
         <h4 class="note-title">${n.title}</h4>
         <p class="note-content">${n.content || '暂无内容'}</p>
+        
+        ${latestComments.length > 0 ? `
+          <div class="note-comments-preview">
+            ${latestComments.slice(0, 2).map(c => `
+              <div class="comment-preview">
+                <span class="comment-preview-user">${c.author_name}:</span>
+                <span class="comment-preview-content">${c.content.length > 30 ? c.content.slice(0, 30) + '...' : c.content}</span>
+              </div>
+            `).join('')}
+            ${commentsCount > 2 ? `<div class="more-comments">还有 ${commentsCount - 2} 条评论...</div>` : ''}
+          </div>
+        ` : ''}
+        
         <div class="note-footer">
           ${n.location ? `<span class="note-location">📍 ${n.location}</span>` : '<span></span>'}
-          <span class="note-likes" onclick="likeNote(${n.id}, this)">
-            ❤️ <span class="likes-num">${n.likes || 0}</span>
-          </span>
+          <div class="note-stats">
+            <span class="note-likes" onclick="event.stopPropagation(); likeNote(${n.id}, this)">
+              ❤️ <span class="likes-num">${n.likes || 0}</span>
+            </span>
+            <span class="note-comments-btn" onclick="event.stopPropagation(); openCommentDiscussion(${n.id})">
+              💬 <span>${commentsCount}</span>
+            </span>
+          </div>
         </div>
       </div>
     `;
@@ -617,6 +644,324 @@ async function likeNote(noteId, el) {
   el.classList.add('liked');
 }
 
+function formatCommentTime(str) {
+  if (!str) return '';
+  const d = new Date(str);
+  const now = new Date();
+  const diff = now - d;
+  const minutes = Math.floor(diff / (1000 * 60));
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  
+  if (minutes < 1) return '刚刚';
+  if (minutes < 60) return `${minutes}分钟前`;
+  if (hours < 24) return `${hours}小时前`;
+  if (days < 7) return `${days}天前`;
+  return `${d.getMonth() + 1}月${d.getDate()}日`;
+}
+
+function renderComment(comment, depth = 0) {
+  const isMyComment = comment.author_id === currentUser?.id;
+  const hasReplies = comment.replies && comment.replies.length > 0;
+  
+  return `
+    <div class="comment-item" data-comment-id="${comment.id}" style="margin-left: ${depth > 0 ? '24px' : '0'}">
+      <div class="comment-header">
+        <div class="comment-author">
+          <div class="comment-avatar">${comment.author_avatar || '👤'}</div>
+          <div class="comment-author-info">
+            <span class="comment-author-name">${comment.author_name}</span>
+            ${comment.reply_to_name ? `<span class="comment-reply-to">回复 <span class="reply-username">@${comment.reply_to_name}</span></span>` : ''}
+            <span class="comment-time">${formatCommentTime(comment.created_at)}</span>
+          </div>
+        </div>
+        <div class="comment-actions">
+          <button class="comment-reply-btn" onclick="startReply(${comment.id}, '${comment.author_name.replace(/'/g, "\\'")}')">回复</button>
+          ${isMyComment ? `<button class="comment-delete-btn" onclick="deleteComment(${comment.id})">删除</button>` : ''}
+        </div>
+      </div>
+      <div class="comment-content">${comment.content}</div>
+      ${hasReplies ? `
+        <div class="comment-replies">
+          ${comment.replies.map(r => renderComment(r, depth + 1)).join('')}
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+function renderCommentsList(comments) {
+  if (!comments || comments.length === 0) {
+    return `
+      <div class="empty-state" style="padding: 30px;">
+        <div class="empty-state-icon" style="font-size:48px;">💬</div>
+        <h3>还没有评论</h3>
+        <p>快来发表第一条评论吧！</p>
+      </div>
+    `;
+  }
+  return comments.map(c => renderComment(c)).join('');
+}
+
+async function loadNoteComments(noteId) {
+  const res = await api(`${API}/notes/${noteId}/comments`);
+  if (res.success) {
+    currentNoteComments = res.comments;
+    return res;
+  }
+  return null;
+}
+
+async function submitComment(noteId, content, parentId = null) {
+  if (!currentUser || !content.trim()) return null;
+  
+  const res = await api(`${API}/notes/${noteId}/comments`, {
+    method: 'POST',
+    body: JSON.stringify({
+      author_id: currentUser.id,
+      content: content.trim(),
+      parent_id: parentId
+    })
+  });
+  
+  if (res.success) {
+    showToast('评论发布成功！', 'success');
+    return res.comment;
+  } else {
+    showToast(res.error || '评论失败', 'error');
+    return null;
+  }
+}
+
+async function deleteComment(commentId) {
+  if (!confirm('确定要删除这条评论吗？') || !currentUser) return;
+  
+  const res = await api(`${API}/comments/${commentId}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ user_id: currentUser.id })
+  });
+  
+  if (res.success) {
+    showToast('评论已删除', 'info');
+    if (currentDiscussionNoteId) {
+      openCommentDiscussion(currentDiscussionNoteId);
+    }
+  } else {
+    showToast(res.error || '删除失败', 'error');
+  }
+}
+
+function startReply(commentId, userName) {
+  if (!currentUser) {
+    showToast('请先登录', 'error');
+    return;
+  }
+  replyingToCommentId = commentId;
+  replyingToUserName = userName;
+  
+  const replyIndicator = document.getElementById('replyIndicator');
+  const replyInput = document.getElementById('replyCommentInput');
+  if (replyIndicator) {
+    replyIndicator.textContent = `回复 @${userName}:`;
+    replyIndicator.classList.remove('hidden');
+  }
+  if (replyInput) {
+    replyInput.focus();
+    replyInput.placeholder = `回复 @${userName}...`;
+  }
+  
+  const cancelReplyBtn = document.getElementById('cancelReplyBtn');
+  if (cancelReplyBtn) {
+    cancelReplyBtn.classList.remove('hidden');
+  }
+}
+
+function cancelReply() {
+  replyingToCommentId = null;
+  replyingToUserName = '';
+  
+  const replyIndicator = document.getElementById('replyIndicator');
+  const replyInput = document.getElementById('replyCommentInput');
+  const cancelReplyBtn = document.getElementById('cancelReplyBtn');
+  
+  if (replyIndicator) replyIndicator.classList.add('hidden');
+  if (replyInput) {
+    replyInput.placeholder = '写下你的评论...';
+    replyInput.value = '';
+  }
+  if (cancelReplyBtn) cancelReplyBtn.classList.add('hidden');
+}
+
+async function openCommentDiscussion(noteId) {
+  if (!currentUser) {
+    showToast('请先登录', 'error');
+    return;
+  }
+  
+  currentDiscussionNoteId = noteId;
+  
+  const noteRes = await api(`${API}/notes/${noteId}`);
+  if (!noteRes.success) {
+    showToast('加载笔记失败', 'error');
+    return;
+  }
+  
+  const note = noteRes.note;
+  const commentsRes = await loadNoteComments(noteId);
+  
+  if (!commentsRes) return;
+  
+  const content = `
+    <div class="comment-modal-body">
+      <div class="discussion-note">
+        <div class="note-header">
+          <div class="note-author">
+            <div class="note-author-avatar">${note.author_avatar || '👤'}</div>
+            <div>
+              <span class="note-author-name">${note.author_name}</span>
+              <span class="note-time">${formatCommentTime(note.created_at)}</span>
+            </div>
+          </div>
+        </div>
+        <h4 class="note-title">${note.title}</h4>
+        ${note.content ? `<p class="note-content-discussion">${note.content}</p>` : ''}
+        <div class="note-footer">
+          ${note.location ? `<span class="note-location">📍 ${note.location}</span>` : '<span></span>'}
+          <span class="note-likes">❤️ ${note.likes || 0}</span>
+        </div>
+      </div>
+      
+      <div class="comments-section">
+        <div class="comments-header">
+          <h4>💬 评论 (${commentsRes.total_count})</h4>
+        </div>
+        
+        <div class="comment-input-section">
+          <div class="reply-indicator hidden" id="replyIndicator"></div>
+          <textarea id="replyCommentInput" placeholder="写下你的评论..." rows="3"></textarea>
+          <div class="comment-input-actions">
+            <button class="btn btn-outline hidden" id="cancelReplyBtn" onclick="cancelReply()">取消回复</button>
+            <button class="btn btn-primary" onclick="handleCommentSubmit()">发表评论</button>
+          </div>
+        </div>
+        
+        <div class="comments-list" id="commentsListContainer">
+          ${renderCommentsList(commentsRes.comments)}
+        </div>
+      </div>
+    </div>
+  `;
+  
+  document.getElementById('commentModalContent').innerHTML = content;
+  document.getElementById('commentModal').classList.remove('hidden');
+  
+  cancelReply();
+}
+
+async function handleCommentSubmit() {
+  const input = document.getElementById('replyCommentInput');
+  const content = input.value;
+  
+  if (!content.trim()) {
+    showToast('请输入评论内容', 'error');
+    return;
+  }
+  
+  const comment = await submitComment(currentDiscussionNoteId, content, replyingToCommentId);
+  if (comment) {
+    input.value = '';
+    cancelReply();
+    if (currentDiscussionNoteId) {
+      openCommentDiscussion(currentDiscussionNoteId);
+    }
+  }
+}
+
+function closeCommentModal() {
+  document.getElementById('commentModal').classList.add('hidden');
+  currentDiscussionNoteId = null;
+  currentNoteComments = [];
+  cancelReply();
+}
+
+async function loadNotifications() {
+  if (!currentUser) return;
+  
+  const res = await api(`${API}/users/${currentUser.id}/notifications`);
+  if (res.success) {
+    renderNotifications(res.notifications);
+    updateNotificationBadge(res.unread_count);
+  }
+}
+
+async function loadUnreadNotificationCount() {
+  if (!currentUser) return;
+  
+  const res = await api(`${API}/users/${currentUser.id}/notifications/unread`);
+  if (res.success) {
+    updateNotificationBadge(res.unread_count);
+  }
+}
+
+function updateNotificationBadge(count) {
+  const badge = document.getElementById('notificationBadge');
+  if (count > 0) {
+    badge.textContent = count > 99 ? '99+' : count;
+    badge.classList.remove('hidden');
+  } else {
+    badge.classList.add('hidden');
+  }
+}
+
+function renderNotifications(notifications) {
+  const list = document.getElementById('notificationList');
+  if (!notifications || notifications.length === 0) {
+    list.innerHTML = `
+      <div class="empty-state" style="padding: 20px;">
+        <div style="font-size: 32px; opacity: 0.5;">🔔</div>
+        <p style="color: var(--text-light);">暂无通知</p>
+      </div>
+    `;
+    return;
+  }
+  
+  list.innerHTML = notifications.map(n => {
+    const typeText = n.type === 'note_comment' ? '评论了你的笔记' : '回复了你的评论';
+    const relatedTitle = n.note_title || n.plan_title || '';
+    
+    return `
+      <div class="notification-item ${n.is_read ? 'read' : 'unread'}" data-notification-id="${n.id}">
+        <div class="notification-avatar">${n.from_user_avatar || '👤'}</div>
+        <div class="notification-content">
+          <div class="notification-text">
+            <span class="notification-username">${n.from_user_name || '用户'}</span>
+            <span>${typeText}</span>
+          </div>
+          <div class="notification-preview">${n.content}</div>
+          ${relatedTitle ? `<div class="notification-related">${n.note_title ? '📝 ' : '📅 '}${relatedTitle}</div>` : ''}
+          <div class="notification-time">${formatCommentTime(n.created_at)}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+  
+  list.querySelectorAll('.notification-item').forEach(item => {
+    item.addEventListener('click', async () => {
+      const notifId = item.dataset.notificationId;
+      await api(`${API}/notifications/${notifId}/read`, { method: 'PUT' });
+      item.classList.remove('unread');
+      item.classList.add('read');
+      loadUnreadNotificationCount();
+    });
+  });
+}
+
+async function markAllNotificationsRead() {
+  if (!currentUser) return;
+  await api(`${API}/users/${currentUser.id}/notifications/read-all`, { method: 'PUT' });
+  loadNotifications();
+}
+
 function openNoteModal(planId, editId = null) {
   document.getElementById('notePlanId').value = planId;
   document.getElementById('noteEditId').value = editId || '';
@@ -639,8 +984,15 @@ async function deleteNote(noteId) {
   const res = await api(`${API}/notes/${noteId}`, { method: 'DELETE' });
   if (res.success) {
     showToast('笔记已删除', 'info');
+    if (currentDiscussionNoteId === noteId) {
+      closeCommentModal();
+    }
     const planId = document.getElementById('notePlanId').value;
-    openPlanDetail(planId);
+    if (planId) {
+      openPlanDetail(planId);
+    } else {
+      refreshCurrentTab();
+    }
   }
 }
 
@@ -723,6 +1075,7 @@ async function initLoginForm() {
       showToast(`欢迎，${res.user.username}！`, 'success');
       showMainApp();
       await initAppContent();
+      startNotificationCheck();
     } else {
       showToast(res.error || '登录失败', 'error');
     }
@@ -819,6 +1172,35 @@ function initEventListeners() {
     if (e.target.id === 'createPlanModal') document.getElementById('createPlanModal').classList.add('hidden');
   });
 
+  document.getElementById('closeCommentBtn').addEventListener('click', closeCommentModal);
+  document.getElementById('commentModal').addEventListener('click', (e) => {
+    if (e.target.id === 'commentModal') closeCommentModal();
+  });
+
+  document.getElementById('notificationBtn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    const dropdown = document.getElementById('notificationDropdown');
+    if (dropdown.classList.contains('hidden')) {
+      loadNotifications();
+      dropdown.classList.remove('hidden');
+    } else {
+      dropdown.classList.add('hidden');
+    }
+  });
+
+  document.getElementById('notificationReadAll').addEventListener('click', (e) => {
+    e.stopPropagation();
+    markAllNotificationsRead();
+  });
+
+  document.addEventListener('click', () => {
+    document.getElementById('notificationDropdown').classList.add('hidden');
+  });
+
+  document.getElementById('notificationDropdown').addEventListener('click', (e) => {
+    e.stopPropagation();
+  });
+
   document.getElementById('filterCity').addEventListener('change', (e) => {
     currentCityFilter = e.target.value;
     loadDiscoverPlans();
@@ -839,11 +1221,14 @@ function initEventListeners() {
   document.getElementById('popularCity').addEventListener('change', loadPopularRoutes);
 }
 
+let notificationCheckInterval = null;
+
 async function init() {
   // 确保所有模态框初始隐藏
   document.getElementById('planDetailModal').classList.add('hidden');
   document.getElementById('createPlanModal').classList.add('hidden');
   document.getElementById('noteModal').classList.add('hidden');
+  document.getElementById('commentModal').classList.add('hidden');
   document.getElementById('toast').classList.add('hidden');
   
   initEventListeners();
@@ -855,6 +1240,26 @@ async function init() {
     currentUser = savedUser;
     showMainApp();
     await initAppContent();
+    startNotificationCheck();
+  }
+}
+
+function startNotificationCheck() {
+  if (notificationCheckInterval) {
+    clearInterval(notificationCheckInterval);
+  }
+  loadUnreadNotificationCount();
+  notificationCheckInterval = setInterval(() => {
+    if (currentUser) {
+      loadUnreadNotificationCount();
+    }
+  }, 30000);
+}
+
+function stopNotificationCheck() {
+  if (notificationCheckInterval) {
+    clearInterval(notificationCheckInterval);
+    notificationCheckInterval = null;
   }
 }
 

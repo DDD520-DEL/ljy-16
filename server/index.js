@@ -198,6 +198,27 @@ app.get('/api/plans/:id', (req, res) => {
       author_name: n.author_name || n.u_username,
       author_avatar: n.author_avatar || n.u_avatar
     }));
+
+    for (const note of notes) {
+      const countResult = db.prepare('SELECT COUNT(*) as count FROM note_comments WHERE note_id = ?').get(note.id);
+      note.comments_count = countResult ? Object.values(countResult)[0] : 0;
+      
+      const latestComments = db.prepare(`
+        SELECT c.*, u.username as author_name
+        FROM note_comments c
+        LEFT JOIN users u ON c.author_id = u.id
+        WHERE c.note_id = ?
+        ORDER BY c.created_at DESC
+        LIMIT 3
+      `).all(note.id);
+      
+      note.latest_comments = latestComments.map(c => ({
+        id: c.id,
+        content: c.content,
+        author_name: c.author_name || c.u_username,
+        created_at: c.created_at
+      }));
+    }
     plan.notes = notes;
 
     delete plan.creator_name;
@@ -231,13 +252,12 @@ app.post('/api/plans/:id/join', (req, res) => {
       return res.status(400).json({ error: '已加入该计划' });
     }
 
-    const tx = db.transaction(() => {
+    db.transaction(() => {
       db.prepare('INSERT INTO plan_participants (plan_id, user_id, role) VALUES (?, ?, ?)')
         .run(planId, user_id, 'member');
       db.prepare('UPDATE citywalk_plans SET current_participants = current_participants + 1 WHERE id = ?')
         .run(planId);
     });
-    tx();
 
     const updated = db.prepare(`
       SELECT p.*, u.username as creator_name, u.avatar as creator_avatar 
@@ -276,12 +296,11 @@ app.post('/api/plans/:id/leave', (req, res) => {
       return res.status(400).json({ error: '创建者不能退出计划' });
     }
 
-    const tx = db.transaction(() => {
+    db.transaction(() => {
       db.prepare('DELETE FROM plan_participants WHERE plan_id = ? AND user_id = ?').run(planId, user_id);
       db.prepare('UPDATE citywalk_plans SET current_participants = current_participants - 1 WHERE id = ?')
         .run(planId);
     });
-    tx();
 
     res.json({ success: true });
   } catch (err) {
@@ -464,6 +483,245 @@ app.post('/api/notes/:id/like', (req, res) => {
 app.delete('/api/notes/:id', (req, res) => {
   try {
     db.prepare('DELETE FROM route_notes WHERE id = ?').run(req.params.id);
+    db.prepare('DELETE FROM note_comments WHERE note_id = ?').run(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/notes/:id/comments', (req, res) => {
+  try {
+    const { author_id, content, parent_id } = req.body;
+    const noteId = req.params.id;
+    
+    if (!author_id || !content) {
+      return res.status(400).json({ error: '缺少必填字段' });
+    }
+
+    const note = db.prepare('SELECT * FROM route_notes WHERE id = ?').get(noteId);
+    if (!note) {
+      return res.status(404).json({ error: '笔记不存在' });
+    }
+
+    let root_id = null;
+    let reply_to_user_id = null;
+    
+    if (parent_id) {
+      const parentComment = db.prepare('SELECT * FROM note_comments WHERE id = ?').get(parent_id);
+      if (!parentComment) {
+        return res.status(404).json({ error: '父评论不存在' });
+      }
+      root_id = parentComment.root_id || parent_id;
+      reply_to_user_id = parentComment.author_id;
+    }
+
+    const stmt = db.prepare(`
+      INSERT INTO note_comments (note_id, author_id, content, parent_id, root_id, reply_to_user_id)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    const result = stmt.run(
+      noteId, author_id, content, 
+      parent_id || null, 
+      root_id, 
+      reply_to_user_id
+    );
+
+    const commentId = result.lastInsertRowid;
+
+    if (!root_id) {
+      db.prepare('UPDATE note_comments SET root_id = ? WHERE id = ?').run(commentId, commentId);
+    }
+
+    db.transaction(() => {
+      if (note.author_id !== author_id) {
+        db.prepare(`
+          INSERT INTO user_notifications (user_id, type, content, related_id, related_type, from_user_id, is_read)
+          VALUES (?, 'note_comment', ?, ?, 'note', ?, 0)
+        `).run(note.author_id, content, noteId, author_id);
+      }
+      
+      if (reply_to_user_id && reply_to_user_id !== author_id && reply_to_user_id !== note.author_id) {
+        db.prepare(`
+          INSERT INTO user_notifications (user_id, type, content, related_id, related_type, from_user_id, is_read)
+          VALUES (?, 'comment_reply', ?, ?, 'comment', ?, 0)
+        `).run(reply_to_user_id, content, commentId, author_id);
+      }
+    });
+
+    const comment = db.prepare(`
+      SELECT c.*, u.username as author_name, u.avatar as author_avatar,
+             ru.username as reply_to_name, ra.avatar as reply_to_avatar
+      FROM note_comments c
+      LEFT JOIN users u ON c.author_id = u.id
+      LEFT JOIN users ru ON c.reply_to_user_id = ru.id
+      WHERE c.id = ?
+    `).get(commentId);
+
+    if (comment) {
+      comment.author_name = comment.author_name || comment.u_username;
+      comment.author_avatar = comment.author_avatar || comment.u_avatar;
+      comment.reply_to_name = comment.reply_to_name || comment.ru_username;
+      comment.reply_to_avatar = comment.reply_to_avatar || comment.ru_avatar;
+    }
+
+    res.json({ success: true, comment });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/notes/:id/comments', (req, res) => {
+  try {
+    const noteId = req.params.id;
+    
+    const comments = db.prepare(`
+      SELECT c.*, u.username as author_name, u.avatar as author_avatar,
+             ru.username as reply_to_name, ra.avatar as reply_to_avatar
+      FROM note_comments c
+      LEFT JOIN users u ON c.author_id = u.id
+      LEFT JOIN users ru ON c.reply_to_user_id = ru.id
+      WHERE c.note_id = ?
+      ORDER BY c.created_at ASC
+    `).all(noteId).map(c => ({
+      ...c,
+      author_name: c.author_name || c.u_username,
+      author_avatar: c.author_avatar || c.u_avatar,
+      reply_to_name: c.reply_to_name || c.ru_username,
+      reply_to_avatar: c.reply_to_avatar || c.ru_avatar
+    }));
+
+    const commentMap = new Map();
+    const rootComments = [];
+    
+    comments.forEach(c => {
+      c.replies = [];
+      commentMap.set(c.id, c);
+      if (!c.parent_id) {
+        rootComments.push(c);
+      } else {
+        const parent = commentMap.get(c.parent_id);
+        if (parent) {
+          parent.replies.push(c);
+        } else {
+          rootComments.push(c);
+        }
+      }
+    });
+
+    function countReplies(comment) {
+      let count = comment.replies.length;
+      comment.replies.forEach(r => count += countReplies(r));
+      return count;
+    }
+
+    res.json({ 
+      success: true, 
+      comments: rootComments,
+      total_count: comments.length,
+      root_count: rootComments.length
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/comments/:id', (req, res) => {
+  try {
+    const { user_id } = req.body;
+    const comment = db.prepare('SELECT * FROM note_comments WHERE id = ?').get(req.params.id);
+    
+    if (!comment) {
+      return res.status(404).json({ error: '评论不存在' });
+    }
+    if (comment.author_id !== user_id) {
+      return res.status(403).json({ error: '无权删除此评论' });
+    }
+
+    db.transaction(() => {
+      function deleteReplies(parentId) {
+        const replies = db.prepare('SELECT id FROM note_comments WHERE parent_id = ?').all(parentId);
+        replies.forEach(r => {
+          deleteReplies(r.id);
+          db.prepare('DELETE FROM note_comments WHERE id = ?').run(r.id);
+        });
+      }
+      deleteReplies(req.params.id);
+      db.prepare('DELETE FROM note_comments WHERE id = ?').run(req.params.id);
+    });
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/users/:id/notifications', (req, res) => {
+  try {
+    const { page = 1, limit = 20 } = req.query;
+    const userId = req.params.id;
+    
+    const notifications = db.prepare(`
+      SELECT nt.*, u.username as from_user_name, u.avatar as from_user_avatar,
+             n.title as note_title, p.title as plan_title
+      FROM user_notifications nt
+      LEFT JOIN users u ON nt.from_user_id = u.id
+      LEFT JOIN route_notes n ON nt.related_type = 'note' AND nt.related_id = n.id
+      LEFT JOIN citywalk_plans p ON nt.related_type = 'plan' AND nt.related_id = p.id
+      WHERE nt.user_id = ?
+      ORDER BY nt.created_at DESC
+      LIMIT ? OFFSET ?
+    `).all(userId, parseInt(limit), (parseInt(page) - 1) * parseInt(limit)).map(n => ({
+      ...n,
+      from_user_name: n.from_user_name || n.u_username,
+      from_user_avatar: n.from_user_avatar || n.u_avatar,
+      note_title: n.note_title || n.n_title,
+      plan_title: n.plan_title || n.p_title
+    }));
+
+    const unreadCount = db.prepare('SELECT COUNT(*) as count FROM user_notifications WHERE user_id = ? AND is_read = 0').get(userId);
+
+    res.json({ 
+      success: true, 
+      notifications,
+      unread_count: unreadCount ? Object.values(unreadCount)[0] : 0
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/users/:id/notifications/unread', (req, res) => {
+  try {
+    const result = db.prepare('SELECT COUNT(*) as count FROM user_notifications WHERE user_id = ? AND is_read = 0').get(req.params.id);
+    const count = result ? Object.values(result)[0] : 0;
+    res.json({ success: true, unread_count: count });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/notifications/:id/read', (req, res) => {
+  try {
+    db.prepare('UPDATE user_notifications SET is_read = 1, read_at = CURRENT_TIMESTAMP WHERE id = ?').run(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/users/:id/notifications/read-all', (req, res) => {
+  try {
+    db.prepare('UPDATE user_notifications SET is_read = 1, read_at = CURRENT_TIMESTAMP WHERE user_id = ? AND is_read = 0').run(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/notifications/:id', (req, res) => {
+  try {
+    db.prepare('DELETE FROM user_notifications WHERE id = ?').run(req.params.id);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });

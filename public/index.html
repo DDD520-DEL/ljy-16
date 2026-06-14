@@ -76,6 +76,19 @@
           <button id="createPlanBtn" class="btn btn-primary create-btn">
             <span>＋</span> 发布计划
           </button>
+          <div class="notification-wrapper" id="notificationWrapper">
+            <button class="notification-btn" id="notificationBtn" title="通知">
+              <span class="notification-icon">🔔</span>
+              <span class="notification-badge hidden" id="notificationBadge">0</span>
+            </button>
+            <div class="notification-dropdown hidden" id="notificationDropdown">
+              <div class="notification-header">
+                <span>通知</span>
+                <button class="notification-read-all" id="notificationReadAll">全部已读</button>
+              </div>
+              <div class="notification-list" id="notificationList"></div>
+            </div>
+          </div>
           <div class="user-info" id="userInfo">
             <span class="user-avatar" id="userAvatar">🧑</span>
             <span class="user-name" id="userName">用户</span>
@@ -267,6 +280,16 @@
             <button type="submit" class="btn btn-primary">保存笔记 ✨</button>
           </div>
         </form>
+      </div>
+    </div>
+
+    <div id="commentModal" class="modal">
+      <div class="modal-content comment-modal">
+        <div class="modal-header">
+          <h2>💬 笔记讨论</h2>
+          <button class="close-btn" id="closeCommentBtn">×</button>
+        </div>
+        <div id="commentModalContent"></div>
       </div>
     </div>
 
