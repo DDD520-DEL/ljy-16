@@ -1,0 +1,20 @@
+{
+  "name": "citywalk-matcher",
+  "version": "1.0.0",
+  "description": "Citywalk搭子匹配与路线共创工具",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node server/index.js",
+    "init-db": "node server/init-data.js"
+  },
+  "keywords": ["citywalk", "匹配", "路线", "社区"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "body-parser": "^1.20.2",
+    "uuid": "^9.0.0"
+  }
+}

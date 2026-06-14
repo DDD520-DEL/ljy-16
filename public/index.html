@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Citywalk - 搭子匹配与路线共创</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <div id="loginModal" class="modal">
+      <div class="modal-content login-modal">
+        <div class="login-header">
+          <div class="logo">🚶‍♂️ Citywalk</div>
+          <p class="login-subtitle">寻找同好搭子，共创城市漫步记忆</p>
+        </div>
+        <form id="loginForm" class="login-form">
+          <div class="form-group">
+            <label>用户名</label>
+            <input type="text" id="loginUsername" placeholder="输入用户名即可登录/注册" required>
+          </div>
+          <div class="form-group">
+            <label>所在城市</label>
+            <select id="loginCity">
+              <option value="">选择城市</option>
+              <option value="上海">上海</option>
+              <option value="北京">北京</option>
+              <option value="广州">广州</option>
+              <option value="成都">成都</option>
+              <option value="杭州">杭州</option>
+              <option value="南京">南京</option>
+              <option value="武汉">武汉</option>
+              <option value="西安">西安</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>个性签名（选填）</label>
+            <input type="text" id="loginBio" placeholder="一句话介绍自己">
+          </div>
+          <button type="submit" class="btn btn-primary btn-block">进入 Citywalk</button>
+        </form>
+        <p class="login-tips">💡 新用户名会自动创建账号</p>
+      </div>
+    </div>
+
+    <div id="mainApp" class="main-app hidden">
+      <header class="app-header">
+        <div class="header-left">
+          <div class="logo">🚶‍♂️ Citywalk</div>
+        </div>
+        <div class="header-center">
+          <nav class="main-nav">
+            <button class="nav-btn active" data-tab="discover">
+              <span class="nav-icon">🔍</span>
+              <span class="nav-text">发现</span>
+            </button>
+            <button class="nav-btn" data-tab="match">
+              <span class="nav-icon">🤝</span>
+              <span class="nav-text">匹配搭子</span>
+            </button>
+            <button class="nav-btn" data-tab="popular">
+              <span class="nav-icon">🔥</span>
+              <span class="nav-text">热门路线</span>
+            </button>
+            <button class="nav-btn" data-tab="favorites">
+              <span class="nav-icon">⭐</span>
+              <span class="nav-text">我的收藏</span>
+            </button>
+            <button class="nav-btn" data-tab="mine">
+              <span class="nav-icon">👤</span>
+              <span class="nav-text">我的</span>
+            </button>
+          </nav>
+        </div>
+        <div class="header-right">
+          <button id="createPlanBtn" class="btn btn-primary create-btn">
+            <span>＋</span> 发布计划
+          </button>
+          <div class="user-info" id="userInfo">
+            <span class="user-avatar" id="userAvatar">🧑</span>
+            <span class="user-name" id="userName">用户</span>
+            <button id="logoutBtn" class="logout-btn" title="退出">退出</button>
+          </div>
+        </div>
+      </header>
+
+      <main class="app-main">
+        <section id="discoverTab" class="tab-content active">
+          <div class="filter-bar">
+            <div class="filter-group">
+              <label>城市</label>
+              <select id="filterCity" class="filter-select">
+                <option value="">全部城市</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <label>主题</label>
+              <div id="themeFilter" class="theme-chips"></div>
+            </div>
+            <div class="filter-group search-group">
+              <input type="text" id="searchKeyword" placeholder="🔍 搜索路线标题或描述">
+            </div>
+          </div>
+          <div class="plans-grid" id="discoverPlans"></div>
+        </section>
+
+        <section id="matchTab" class="tab-content">
+          <div class="match-hero">
+            <h2>🤝 智能匹配搭子</h2>
+            <p>基于你的城市和兴趣偏好，为你推荐最合适的Citywalk伙伴</p>
+            <div class="match-controls">
+              <select id="matchCity" class="filter-select">
+                <option value="">选择城市匹配</option>
+              </select>
+              <select id="matchTheme" class="filter-select">
+                <option value="">选择主题匹配</option>
+              </select>
+              <button id="refreshMatchBtn" class="btn btn-outline">🔄 刷新推荐</button>
+            </div>
+          </div>
+          <div class="match-grid" id="matchGrid"></div>
+        </section>
+
+        <section id="popularTab" class="tab-content">
+          <div class="popular-header">
+            <h2>🔥 热门路线排行榜</h2>
+            <p>基于参与人数、笔记数量和点赞数综合排名</p>
+            <div class="filter-group">
+              <select id="popularCity" class="filter-select">
+                <option value="">全部城市</option>
+              </select>
+            </div>
+          </div>
+          <div class="popular-list" id="popularList"></div>
+        </section>
+
+        <section id="favoritesTab" class="tab-content">
+          <div class="favorites-header">
+            <h2>⭐ 我的路线收藏夹</h2>
+            <p>收藏喜欢的路线，随时出发</p>
+          </div>
+          <div class="favorites-grid" id="favoritesGrid"></div>
+        </section>
+
+        <section id="mineTab" class="tab-content">
+          <div class="profile-card">
+            <div class="profile-left">
+              <div class="profile-avatar" id="profileAvatar">🧑</div>
+              <div class="profile-info">
+                <h2 id="profileName">用户名</h2>
+                <p id="profileBio" class="profile-bio">个性签名</p>
+                <span class="profile-city" id="profileCity">📍 城市</span>
+              </div>
+            </div>
+            <div class="profile-stats">
+              <div class="stat-item">
+                <div class="stat-num" id="statPlans">0</div>
+                <div class="stat-label">参与计划</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-num" id="statFavorites">0</div>
+                <div class="stat-label">收藏路线</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-num" id="statNotes">0</div>
+                <div class="stat-label">共创笔记</div>
+              </div>
+            </div>
+          </div>
+          <div class="my-plans-section">
+            <h3>📅 我参与的Citywalk</h3>
+            <div class="my-plans-grid" id="myPlansGrid"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div id="planDetailModal" class="modal">
+      <div class="modal-content detail-modal">
+        <div class="modal-header">
+          <button class="close-btn" id="closeDetailBtn">×</button>
+        </div>
+        <div id="planDetailContent"></div>
+      </div>
+    </div>
+
+    <div id="createPlanModal" class="modal">
+      <div class="modal-content create-modal">
+        <div class="modal-header">
+          <h2>📝 发布Citywalk计划</h2>
+          <button class="close-btn" id="closeCreateBtn">×</button>
+        </div>
+        <form id="createPlanForm" class="create-form">
+          <div class="form-row">
+            <div class="form-group">
+              <label>计划标题 *</label>
+              <input type="text" id="planTitle" placeholder="例如：法租界老洋房深度游" required>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>城市 *</label>
+              <select id="planCity" required>
+                <option value="">选择城市</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>主题 *</label>
+              <select id="planTheme" required>
+                <option value="">选择主题</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>开始时间 *</label>
+              <input type="datetime-local" id="planStartTime" required>
+            </div>
+            <div class="form-group">
+              <label>时长（小时）</label>
+              <input type="number" id="planDuration" value="3" min="1" max="24" step="0.5">
+            </div>
+            <div class="form-group">
+              <label>人数上限</label>
+              <input type="number" id="planMax" value="6" min="2" max="50">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>集合地点</label>
+            <input type="text" id="planMeeting" placeholder="例如：人民广场地铁站5号口">
+          </div>
+          <div class="form-group">
+            <label>路线描述</label>
+            <textarea id="planDescription" rows="4" placeholder="详细介绍一下你的Citywalk路线和亮点..."></textarea>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-outline" id="cancelCreateBtn">取消</button>
+            <button type="submit" class="btn btn-primary">发布计划 🚀</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div id="noteModal" class="modal">
+      <div class="modal-content note-modal">
+        <div class="modal-header">
+          <h2 id="noteModalTitle">📝 添加路线笔记</h2>
+          <button class="close-btn" id="closeNoteBtn">×</button>
+        </div>
+        <form id="noteForm">
+          <input type="hidden" id="notePlanId">
+          <input type="hidden" id="noteEditId">
+          <div class="form-group">
+            <label>标题 *</label>
+            <input type="text" id="noteTitle" placeholder="例如：隐藏在弄堂里的宝藏小店" required>
+          </div>
+          <div class="form-group">
+            <label>地点</label>
+            <input type="text" id="noteLocation" placeholder="在哪里发现的？">
+          </div>
+          <div class="form-group">
+            <label>内容</label>
+            <textarea id="noteContent" rows="5" placeholder="记录你的发现和感受..."></textarea>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-outline" id="cancelNoteBtn">取消</button>
+            <button type="submit" class="btn btn-primary">保存笔记 ✨</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div id="toast" class="toast hidden"></div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
