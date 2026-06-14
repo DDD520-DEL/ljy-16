@@ -7,6 +7,7 @@ let currentKeyword = '';
 let favoriteIds = new Set();
 let currentNoteComments = [];
 let currentDiscussionNoteId = null;
+let currentCommentCount = 0;
 let replyingToCommentId = null;
 let replyingToUserName = '';
 
@@ -743,8 +744,39 @@ async function deleteComment(commentId) {
   
   if (res.success) {
     showToast('评论已删除', 'info');
-    if (currentDiscussionNoteId) {
-      openCommentDiscussion(currentDiscussionNoteId);
+    
+    const removedCount = removeFromTree(currentNoteComments, commentId);
+    if (removedCount > 0) {
+      updateCommentCount(-removedCount);
+    }
+    
+    const commentEl = document.querySelector(`.comment-item[data-comment-id="${commentId}"]`);
+    if (commentEl) {
+      const parentEl = commentEl.parentElement;
+      commentEl.style.transition = 'opacity 0.2s ease-out, height 0.2s ease-out';
+      commentEl.style.opacity = '0';
+      commentEl.style.height = commentEl.offsetHeight + 'px';
+      requestAnimationFrame(() => {
+        commentEl.style.height = '0px';
+        commentEl.style.margin = '0';
+        commentEl.style.overflow = 'hidden';
+      });
+      setTimeout(() => {
+        commentEl.remove();
+        if (parentEl && parentEl.classList.contains('comment-replies') && parentEl.children.length === 0) {
+          parentEl.remove();
+        }
+        const listContainer = document.getElementById('commentsListContainer');
+        if (listContainer && listContainer.children.length === 0) {
+          listContainer.innerHTML = `
+            <div class="empty-state" style="padding: 30px;">
+              <div class="empty-state-icon" style="font-size:48px;">💬</div>
+              <h3>还没有评论</h3>
+              <p>快来发表第一条评论吧！</p>
+            </div>
+          `;
+        }
+      }, 200);
     }
   } else {
     showToast(res.error || '删除失败', 'error');
@@ -811,6 +843,8 @@ async function openCommentDiscussion(noteId) {
   
   if (!commentsRes) return;
   
+  currentCommentCount = commentsRes.total_count;
+  
   const content = `
     <div class="comment-modal-body">
       <div class="discussion-note">
@@ -833,7 +867,7 @@ async function openCommentDiscussion(noteId) {
       
       <div class="comments-section">
         <div class="comments-header">
-          <h4>💬 评论 (${commentsRes.total_count})</h4>
+          <h4>💬 评论 (<span id="commentCount">${currentCommentCount}</span>)</h4>
         </div>
         
         <div class="comment-input-section">
@@ -858,6 +892,56 @@ async function openCommentDiscussion(noteId) {
   cancelReply();
 }
 
+function updateCommentCount(delta) {
+  currentCommentCount += delta;
+  const countEl = document.getElementById('commentCount');
+  if (countEl) {
+    countEl.textContent = currentCommentCount;
+  }
+}
+
+function findCommentAndParent(comments, commentId, parent = null) {
+  for (const c of comments) {
+    if (c.id === commentId) return { comment: c, parent, list: comments };
+    if (c.replies && c.replies.length > 0) {
+      const found = findCommentAndParent(c.replies, commentId, c);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+function getCommentDepth(comments, commentId, depth = 0) {
+  for (const c of comments) {
+    if (c.id === commentId) return depth;
+    if (c.replies && c.replies.length > 0) {
+      const found = getCommentDepth(c.replies, commentId, depth + 1);
+      if (found !== -1) return found;
+    }
+  }
+  return -1;
+}
+
+function insertCommentIntoTree(comment) {
+  const newComment = { ...comment, replies: [] };
+  
+  if (!comment.parent_id) {
+    currentNoteComments.push(newComment);
+    return { isRoot: true, parentId: null, depth: 0 };
+  }
+  
+  const found = findCommentAndParent(currentNoteComments, comment.parent_id);
+  if (found) {
+    if (!found.comment.replies) found.comment.replies = [];
+    found.comment.replies.push(newComment);
+    const depth = getCommentDepth(currentNoteComments, comment.id, 0);
+    return { isRoot: false, parentId: comment.parent_id, depth };
+  }
+  
+  currentNoteComments.push(newComment);
+  return { isRoot: true, parentId: null, depth: 0 };
+}
+
 async function handleCommentSubmit() {
   const input = document.getElementById('replyCommentInput');
   const content = input.value;
@@ -871,10 +955,69 @@ async function handleCommentSubmit() {
   if (comment) {
     input.value = '';
     cancelReply();
-    if (currentDiscussionNoteId) {
-      openCommentDiscussion(currentDiscussionNoteId);
+    
+    const result = insertCommentIntoTree(comment);
+    updateCommentCount(1);
+    
+    const listContainer = document.getElementById('commentsListContainer');
+    if (!listContainer) return;
+    
+    const emptyState = listContainer.querySelector('.empty-state');
+    if (emptyState) {
+      listContainer.innerHTML = '';
+    }
+    
+    const newCommentHtml = renderComment(comment, result.depth);
+    
+    if (result.isRoot) {
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = newCommentHtml.trim();
+      const newEl = tempDiv.firstElementChild;
+      newEl.style.animation = 'fadeIn 0.3s ease-out';
+      listContainer.appendChild(newEl);
+    } else {
+      const parentEl = listContainer.querySelector(`.comment-item[data-comment-id="${result.parentId}"]`);
+      if (parentEl) {
+        let repliesContainer = parentEl.querySelector(':scope > .comment-replies');
+        if (!repliesContainer) {
+          repliesContainer = document.createElement('div');
+          repliesContainer.className = 'comment-replies';
+          parentEl.appendChild(repliesContainer);
+        }
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = newCommentHtml.trim();
+        const newEl = tempDiv.firstElementChild;
+        newEl.style.animation = 'fadeIn 0.3s ease-out';
+        repliesContainer.appendChild(newEl);
+      }
     }
   }
+}
+
+function countTreeComments(comments) {
+  let count = 0;
+  for (const c of comments) {
+    count++;
+    if (c.replies && c.replies.length > 0) {
+      count += countTreeComments(c.replies);
+    }
+  }
+  return count;
+}
+
+function removeFromTree(comments, commentId) {
+  for (let i = 0; i < comments.length; i++) {
+    if (comments[i].id === commentId) {
+      const removed = countTreeComments([comments[i]]);
+      comments.splice(i, 1);
+      return removed;
+    }
+    if (comments[i].replies && comments[i].replies.length > 0) {
+      const removed = removeFromTree(comments[i].replies, commentId);
+      if (removed > 0) return removed;
+    }
+  }
+  return 0;
 }
 
 function closeCommentModal() {
