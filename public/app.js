@@ -12,6 +12,7 @@ let replyingToCommentId = null;
 let replyingToUserName = '';
 let currentRatingPlanId = null;
 let currentRatings = { route_design: 0, organization: 0, partner_fit: 0 };
+let currentTimelineFilter = 'all';
 
 const avatarPool = ['🧑', '👩', '👨', '👧', '👦', '🧔', '👵', '👴', '🧑‍🎨', '👨‍🍳', '👩‍💻', '🧑‍🚀', '🎨', '📷', '🎭', '🎵'];
 
@@ -382,6 +383,11 @@ async function loadMyPlans() {
   document.getElementById('statPlans').textContent = res.success ? res.plans.length : 0;
   document.getElementById('statFavorites').textContent = favRes.success ? favRes.favorites.length : 0;
   
+  const followingRes = await api(`${API}/users/${currentUser.id}/following`);
+  const followersRes = await api(`${API}/users/${currentUser.id}/followers`);
+  document.getElementById('statFollowing').textContent = followingRes.success ? followingRes.users.length : 0;
+  document.getElementById('statFollowers').textContent = followersRes.success ? followersRes.users.length : 0;
+  
   let totalNotes = 0;
   if (res.success && res.plans.length > 0) {
     for (const p of res.plans) {
@@ -573,8 +579,10 @@ async function openPlanDetail(planId) {
   const hasMyRating = currentUser && ratingsList.some(r => r.user_id === currentUser.id);
   const canRate = plan.status === 'completed' && isJoined && !isCreator && currentUser && !hasMyRating;
 
-  const participantsHtml = (plan.participants || []).map(p => `
-    <div class="participant-item">
+  const participantsHtml = (plan.participants || []).map(p => {
+    const isMe = currentUser && Number(p.id) === Number(currentUser.id);
+    return `
+    <div class="participant-item" data-user-id="${p.id}">
       <div class="participant-item-avatar">${p.avatar || '👤'}</div>
       <div class="participant-item-info">
         <span class="participant-item-name">${p.username}</span>
@@ -582,8 +590,16 @@ async function openPlanDetail(planId) {
           ${p.role === 'creator' ? '🌟 创建者' : '成员'}
         </span>
       </div>
+      ${!isMe ? `
+        <button class="participant-follow-btn" 
+                data-user-id="${p.id}"
+                data-follow-text="+ 关注"
+                data-following-text="已关注">
+          加载中...
+        </button>
+      ` : ''}
     </div>
-  `).join('');
+  `}).join('');
 
   const notesHtml = (plan.notes && plan.notes.length > 0) ? plan.notes.map(n => {
     const isMyNote = n.author_id === currentUser?.id;
@@ -742,6 +758,22 @@ async function openPlanDetail(planId) {
 
   document.getElementById('planDetailContent').innerHTML = content;
   document.getElementById('planDetailModal').classList.remove('hidden');
+  
+  const followBtns = document.querySelectorAll('#planDetailModal .participant-follow-btn');
+  followBtns.forEach(async (btn) => {
+    const userId = btn.dataset.userId;
+    const isFollowing = await checkFollowStatus(userId);
+    if (isFollowing) {
+      btn.classList.add('following');
+      btn.textContent = btn.dataset.followingText || '已关注';
+    } else {
+      btn.textContent = btn.dataset.followText || '+ 关注';
+    }
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleFollow(userId, btn);
+    });
+  });
 }
 
 async function joinPlan(planId) {
@@ -1586,10 +1618,169 @@ function renderRatingList(ratings) {
   `;
 }
 
+function getFeedTypeLabel(type) {
+  const labels = {
+    create_plan: { text: '发布了新计划', icon: '📅', cls: 'create_plan' },
+    join_plan: { text: '加入了活动', icon: '🤝', cls: 'join_plan' },
+    complete_citywalk: { text: '完成了Citywalk', icon: '✅', cls: 'complete_citywalk' },
+    create_note: { text: '写了笔记', icon: '📝', cls: 'create_note' }
+  };
+  return labels[type] || { text: type, icon: '📌', cls: '' };
+}
+
+function renderFeedCard(feed) {
+  const typeInfo = getFeedTypeLabel(feed.type);
+  const theme = feed.related.theme ? getThemeInfo(feed.related.theme) : null;
+  
+  let title = '';
+  let meta = '';
+  let notePreview = '';
+  
+  if (feed.related.type === 'plan') {
+    title = feed.related.title || '未命名计划';
+    if (theme) {
+      meta += `<span style="color:${theme.color}">${theme.icon} ${theme.name}</span>`;
+    }
+    if (feed.related.city) {
+      meta += `<span>📍 ${feed.related.city}</span>`;
+    }
+  } else if (feed.related.type === 'note') {
+    title = feed.related.title || '未命名笔记';
+    if (feed.extra && feed.extra.plan_id) {
+      meta += `<span>📅 关联的路线笔记</span>`;
+    }
+    if (feed.related.content) {
+      notePreview = `<div class="feed-note-preview">${feed.related.content}</div>`;
+    }
+  }
+  
+  const planId = feed.related.type === 'plan' ? feed.related.id : (feed.extra && feed.extra.plan_id);
+  return `
+    <div class="feed-card" 
+         data-related-type="${feed.related.type}" 
+         data-related-id="${feed.related.id}"
+         data-plan-id="${planId || ''}">
+      <div class="feed-avatar">${feed.user?.avatar || '👤'}</div>
+      <div class="feed-content">
+        <div class="feed-header">
+          <span class="feed-username">${feed.user?.username || '用户'}</span>
+          <span class="feed-type-badge ${typeInfo.cls}">
+            <span>${typeInfo.icon}</span>
+            <span>${typeInfo.text}</span>
+          </span>
+          <span class="feed-time">${formatCommentTime(feed.created_at)}</span>
+        </div>
+        <div class="feed-title">${title}</div>
+        ${meta ? `<div class="feed-meta">${meta}</div>` : ''}
+        ${notePreview}
+      </div>
+    </div>
+  `;
+}
+
+async function loadTimeline() {
+  if (!currentUser) return;
+  
+  const timelineList = document.getElementById('timelineList');
+  if (!timelineList) return;
+  
+  const params = new URLSearchParams();
+  if (currentTimelineFilter !== 'all') {
+    params.set('type', currentTimelineFilter);
+  }
+  
+  const res = await api(`${API}/users/${currentUser.id}/feeds?${params}`);
+  
+  if (!res.success || !res.feeds || res.feeds.length === 0) {
+    timelineList.innerHTML = `
+      <div class="timeline-empty">
+        <div class="timeline-empty-icon">👥</div>
+        <h3>还没有动态</h3>
+        <p>去关注一些搭子，就能看到他们的最新动态啦~</p>
+      </div>
+    `;
+    return;
+  }
+  
+  timelineList.innerHTML = res.feeds.map(f => renderFeedCard(f)).join('');
+  
+  timelineList.querySelectorAll('.feed-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const relatedType = card.dataset.relatedType;
+      const relatedId = card.dataset.relatedId;
+      const planId = card.dataset.planId;
+      
+      if (relatedType === 'plan' && relatedId) {
+        openPlanDetail(relatedId);
+      } else if (relatedType === 'note') {
+        if (planId) {
+          openPlanDetail(planId);
+        } else {
+          showToast('笔记详情即将上线', 'info');
+        }
+      }
+    });
+  });
+}
+
+function initTimelineFilter() {
+  document.querySelectorAll('.timeline-filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.timeline-filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentTimelineFilter = btn.dataset.filter;
+      loadTimeline();
+    });
+  });
+}
+
+async function toggleFollow(targetUserId, btn) {
+  if (!currentUser) {
+    showToast('请先登录', 'error');
+    return;
+  }
+  if (Number(targetUserId) === Number(currentUser.id)) return;
+  
+  const isFollowing = btn.classList.contains('following');
+  const method = isFollowing ? 'DELETE' : 'POST';
+  
+  const res = await api(`${API}/follows`, {
+    method,
+    body: JSON.stringify({
+      follower_id: currentUser.id,
+      following_id: targetUserId
+    })
+  });
+  
+  if (res.success) {
+    if (isFollowing) {
+      btn.classList.remove('following');
+      btn.textContent = btn.dataset.followText || '+ 关注';
+      showToast('已取消关注', 'info');
+    } else {
+      btn.classList.add('following');
+      btn.textContent = btn.dataset.followingText || '已关注';
+      showToast('关注成功！', 'success');
+    }
+    loadTimeline();
+  } else {
+    showToast(res.error || '操作失败', 'error');
+  }
+}
+
+async function checkFollowStatus(targetUserId) {
+  if (!currentUser) return false;
+  const res = await api(`${API}/users/${currentUser.id}/follows-status?target_id=${targetUserId}`);
+  return res.success ? res.is_following : false;
+}
+
 function refreshCurrentTab() {
   const activeTab = document.querySelector('.nav-btn.active')?.dataset.tab;
   switch (activeTab) {
-    case 'discover': loadDiscoverPlans(); break;
+    case 'discover': 
+      loadTimeline();
+      loadDiscoverPlans(); 
+      break;
     case 'match': loadMatchSuggestions(); break;
     case 'popular': loadPopularRoutes(); break;
     case 'favorites': loadFavorites(); break;
@@ -1678,10 +1869,12 @@ async function initAppContent() {
   await populateCitySelects();
   await populateThemeSelects();
   renderThemeFilter();
+  initTimelineFilter();
   
   if (currentUser) {
     const favRes = await api(`${API}/users/${currentUser.id}/favorites`);
     if (favRes.success) favoriteIds = new Set(favRes.favorites.map(f => f.id));
+    loadTimeline();
   }
   
   loadDiscoverPlans();

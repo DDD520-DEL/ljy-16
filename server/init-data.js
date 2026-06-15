@@ -138,6 +138,7 @@ function seedData() {
       p.duration_hours, p.max_participants, 1, p.meeting_point, p.status
     );
     const planId = result.lastInsertRowid;
+    p.id = planId;
     planIds.push(planId);
     insertParticipant.run(planId, p.creator_id, 'creator');
 
@@ -351,6 +352,101 @@ function seedData() {
     insertNotif.run(n.user_id, n.type, n.content, n.related_id, n.related_type, n.from_user_id, n.is_read);
   });
   console.log(`✅ 已创建 ${notifications.length} 条通知`);
+
+  const follows = [
+    { follower_id: userIds[0], following_id: userIds[1] },
+    { follower_id: userIds[0], following_id: userIds[2] },
+    { follower_id: userIds[0], following_id: userIds[5] },
+    { follower_id: userIds[1], following_id: userIds[0] },
+    { follower_id: userIds[1], following_id: userIds[3] },
+    { follower_id: userIds[2], following_id: userIds[0] },
+    { follower_id: userIds[2], following_id: userIds[4] },
+    { follower_id: userIds[3], following_id: userIds[5] },
+    { follower_id: userIds[3], following_id: userIds[6] },
+    { follower_id: userIds[4], following_id: userIds[1] },
+    { follower_id: userIds[4], following_id: userIds[2] },
+    { follower_id: userIds[5], following_id: userIds[0] },
+    { follower_id: userIds[5], following_id: userIds[7] },
+    { follower_id: userIds[6], following_id: userIds[3] },
+    { follower_id: userIds[7], following_id: userIds[4] },
+    { follower_id: userIds[7], following_id: userIds[8] }
+  ];
+
+  const insertFollow = db.prepare(`
+    INSERT OR IGNORE INTO user_follows (follower_id, following_id)
+    VALUES (?, ?)
+  `);
+  follows.forEach(f => insertFollow.run(f.follower_id, f.following_id));
+  console.log(`✅ 已创建 ${follows.length} 条关注关系`);
+
+  const feeds = [];
+  
+  plans.forEach((p, idx) => {
+    const hoursAgo = (plans.length - idx) * 2;
+    feeds.push({
+      user_id: p.creator_id,
+      type: 'create_plan',
+      related_id: p.id,
+      related_type: 'plan',
+      extra_data: JSON.stringify({ title: p.title, theme: p.theme, city: p.city }),
+      created_at: new Date(Date.now() - hoursAgo * 3600 * 1000).toISOString()
+    });
+  });
+
+  noteIds.forEach((n, idx) => {
+    const hoursAgo = (noteIds.length - idx) * 1.5 + 1;
+    feeds.push({
+      user_id: n.author_id,
+      type: 'create_note',
+      related_id: n.id,
+      related_type: 'note',
+      extra_data: JSON.stringify({ plan_id: n.plan_id }),
+      created_at: new Date(Date.now() - hoursAgo * 3600 * 1000).toISOString()
+    });
+  });
+
+  const joinRecords = db.prepare(`
+    SELECT pp.plan_id, pp.user_id, cp.status, cp.title, cp.theme, cp.city
+    FROM plan_participants pp
+    JOIN citywalk_plans cp ON pp.plan_id = cp.id
+    WHERE pp.role = 'member'
+    ORDER BY pp.id
+  `).all();
+  
+  joinRecords.slice(0, 8).forEach((r, idx) => {
+    const hoursAgo = (8 - idx) * 1 + 0.5;
+    feeds.push({
+      user_id: r.user_id,
+      type: 'join_plan',
+      related_id: r.plan_id,
+      related_type: 'plan',
+      extra_data: JSON.stringify({ title: r.title, theme: r.theme, city: r.city }),
+      created_at: new Date(Date.now() - hoursAgo * 3600 * 1000).toISOString()
+    });
+  });
+
+  plans.filter(p => p.status === 'completed').slice(0, 3).forEach((p, idx) => {
+    const hoursAgo = (3 - idx) * 3 + 2;
+    feeds.push({
+      user_id: p.creator_id,
+      type: 'complete_citywalk',
+      related_id: p.id,
+      related_type: 'plan',
+      extra_data: JSON.stringify({ title: p.title, theme: p.theme, city: p.city }),
+      created_at: new Date(Date.now() - hoursAgo * 3600 * 1000).toISOString()
+    });
+  });
+
+  feeds.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+  const insertFeed = db.prepare(`
+    INSERT INTO activity_feeds (user_id, type, related_id, related_type, extra_data, created_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+  feeds.forEach(f => {
+    insertFeed.run(f.user_id, f.type, f.related_id, f.related_type, f.extra_data, f.created_at);
+  });
+  console.log(`✅ 已创建 ${feeds.length} 条动态`);
 
   console.log('\n🎉 数据初始化完成！');
   console.log('\n📋 默认用户账号：');

@@ -99,6 +99,19 @@
 
       <main class="app-main">
         <section id="discoverTab" class="tab-content active">
+          <div id="timelineSection" class="timeline-section">
+            <div class="timeline-header">
+              <div class="timeline-title">
+                <span class="timeline-icon">📰</span>
+                <h2>搭子动态</h2>
+              </div>
+              <div class="timeline-filter">
+                <button class="timeline-filter-btn active" data-filter="all">全部动态</button>
+                <button class="timeline-filter-btn" data-filter="new_plan">仅新计划</button>
+              </div>
+            </div>
+            <div id="timelineList" class="timeline-list"></div>
+          </div>
           <div class="filter-bar">
             <div class="filter-group">
               <label>城市</label>
@@ -177,6 +190,16 @@
               <div class="stat-item">
                 <div class="stat-num" id="statNotes">0</div>
                 <div class="stat-label">共创笔记</div>
+              </div>
+            </div>
+            <div class="profile-follow-section" id="profileFollowSection">
+              <div class="profile-follow-stat" id="followingStat">
+                <div class="profile-follow-num" id="statFollowing">0</div>
+                <div class="profile-follow-label">关注</div>
+              </div>
+              <div class="profile-follow-stat" id="followersStat">
+                <div class="profile-follow-num" id="statFollowers">0</div>
+                <div class="profile-follow-label">粉丝</div>
               </div>
             </div>
           </div>

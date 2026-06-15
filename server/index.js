@@ -89,6 +89,12 @@ app.post('/api/plans', (req, res) => {
     plan.creator = creator;
     plan.participants = [creator];
 
+    createFeed(creator_id, 'create_plan', plan.id, 'plan', {
+      title: plan.title,
+      city: plan.city,
+      theme: plan.theme
+    });
+
     res.json({ success: true, plan });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -276,6 +282,12 @@ app.post('/api/plans/:id/join', (req, res) => {
     delete updated.creator_name;
     delete updated.creator_avatar;
 
+    createFeed(user_id, 'join_plan', planId, 'plan', {
+      title: updated.title,
+      city: updated.city,
+      theme: updated.theme
+    });
+
     res.json({ success: true, plan: updated });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -311,6 +323,14 @@ app.post('/api/plans/:id/leave', (req, res) => {
 app.post('/api/plans/:id/complete', (req, res) => {
   try {
     db.prepare("UPDATE citywalk_plans SET status = 'completed' WHERE id = ?").run(req.params.id);
+    const plan = db.prepare('SELECT * FROM citywalk_plans WHERE id = ?').get(req.params.id);
+    if (plan) {
+      createFeed(plan.creator_id, 'complete_citywalk', plan.id, 'plan', {
+        title: plan.title,
+        city: plan.city,
+        theme: plan.theme
+      });
+    }
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -571,6 +591,11 @@ app.post('/api/notes', (req, res) => {
       note.author_name = note.author_name || note.u_username;
       note.author_avatar = note.author_avatar || note.u_avatar;
     }
+
+    createFeed(author_id, 'create_note', result.lastInsertRowid, 'note', {
+      title: title,
+      plan_id: plan_id
+    });
 
     res.json({ success: true, note });
   } catch (err) {
@@ -1000,6 +1025,173 @@ app.get('/api/users/:id/ratings-stats', (req, res) => {
         distribution
       }
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+function createFeed(user_id, type, related_id, related_type, extra_data = {}) {
+  try {
+    const stmt = db.prepare(`
+      INSERT INTO activity_feeds (user_id, type, related_id, related_type, extra_data)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    stmt.run(user_id, type, related_id, related_type, JSON.stringify(extra_data));
+    return true;
+  } catch (e) {
+    console.error('创建动态失败:', e.message);
+    return false;
+  }
+}
+
+app.post('/api/follows', (req, res) => {
+  try {
+    const { follower_id, following_id } = req.body;
+    if (!follower_id || !following_id) {
+      return res.status(400).json({ error: '缺少必填字段' });
+    }
+    if (Number(follower_id) === Number(following_id)) {
+      return res.status(400).json({ error: '不能关注自己' });
+    }
+    const stmt = db.prepare('INSERT OR IGNORE INTO user_follows (follower_id, following_id) VALUES (?, ?)');
+    stmt.run(follower_id, following_id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/follows', (req, res) => {
+  try {
+    const { follower_id, following_id } = req.body;
+    db.prepare('DELETE FROM user_follows WHERE follower_id = ? AND following_id = ?').run(follower_id, following_id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/users/:id/following', (req, res) => {
+  try {
+    const userId = req.params.id;
+    const users = db.prepare(`
+      SELECT u.*, fl.created_at as followed_at
+      FROM user_follows fl
+      LEFT JOIN users u ON fl.following_id = u.id
+      WHERE fl.follower_id = ?
+      ORDER BY fl.created_at DESC
+    `).all(userId).map(u => ({
+      id: u.id,
+      username: u.username,
+      avatar: u.avatar,
+      bio: u.bio,
+      city: u.city,
+      followed_at: u.followed_at
+    }));
+    res.json({ success: true, users });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/users/:id/followers', (req, res) => {
+  try {
+    const userId = req.params.id;
+    const users = db.prepare(`
+      SELECT u.*, fl.created_at as followed_at
+      FROM user_follows fl
+      LEFT JOIN users u ON fl.follower_id = u.id
+      WHERE fl.following_id = ?
+      ORDER BY fl.created_at DESC
+    `).all(userId).map(u => ({
+      id: u.id,
+      username: u.username,
+      avatar: u.avatar,
+      bio: u.bio,
+      city: u.city,
+      followed_at: u.followed_at
+    }));
+    res.json({ success: true, users });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/users/:id/follows-status', (req, res) => {
+  try {
+    const userId = req.params.id;
+    const { target_id } = req.query;
+    if (!target_id) {
+      return res.status(400).json({ error: '缺少 target_id' });
+    }
+    const result = db.prepare('SELECT * FROM user_follows WHERE follower_id = ? AND following_id = ?').get(userId, target_id);
+    res.json({ success: true, is_following: !!result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/users/:id/feeds', (req, res) => {
+  try {
+    const userId = req.params.id;
+    const { type = 'all', page = 1, limit = 30 } = req.query;
+
+    const followings = db.prepare('SELECT following_id FROM user_follows WHERE follower_id = ?').all(userId);
+    const followingIds = followings.map(f => f.following_id);
+    
+    if (followingIds.length === 0) {
+      return res.json({ success: true, feeds: [], has_more: false });
+    }
+
+    const placeholders = followingIds.map(() => '?').join(',');
+    
+    let sql = `
+      SELECT fd.*
+      FROM activity_feeds fd
+      LEFT JOIN users u ON fd.user_id = u.id
+      LEFT JOIN citywalk_plans p ON fd.related_id = p.id
+      LEFT JOIN route_notes n ON fd.related_id = n.id
+      WHERE fd.user_id IN (${placeholders})
+    `;
+    const params = [...followingIds];
+
+    if (type === 'new_plan') {
+      sql += ' AND fd.type = ?';
+      params.push('create_plan');
+    }
+
+    sql += ' ORDER BY fd.created_at DESC LIMIT ? OFFSET ?';
+    params.push(parseInt(limit), (parseInt(page) - 1) * parseInt(limit));
+
+    const feeds = db.prepare(sql).all(...params).map(f => {
+      let extra = {};
+      try {
+        extra = f.extra_data ? JSON.parse(f.extra_data) : {};
+      } catch (e) {}
+      
+      return {
+        id: f.id,
+        type: f.type,
+        created_at: f.created_at,
+        user: {
+          id: f.user_id,
+          username: f.u_username,
+          avatar: f.u_avatar
+        },
+        related: {
+          id: f.related_id || (f.related_type === 'plan' ? f.p_id : f.n_id),
+          type: f.related_type,
+          title: f.related_type === 'plan' ? (f.p_title || extra.title) : (f.n_title || extra.title),
+          theme: f.p_theme || extra.theme,
+          city: f.p_city || extra.city,
+          status: f.p_status,
+          content: f.n_content
+        },
+        extra
+      };
+    });
+
+    res.json({ success: true, feeds, has_more: feeds.length >= parseInt(limit) });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
