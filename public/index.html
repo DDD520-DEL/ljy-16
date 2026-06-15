@@ -204,8 +204,17 @@
             </div>
           </div>
           <div class="my-plans-section">
-            <h3>📅 我参与的Citywalk</h3>
+            <div class="my-section-header">
+              <h3>📅 我参与的Citywalk</h3>
+            </div>
             <div class="my-plans-grid" id="myPlansGrid"></div>
+          </div>
+          <div class="my-templates-section">
+            <div class="my-section-header">
+              <h3>📋 我的路线模板</h3>
+              <button class="btn btn-outline btn-sm" id="manageTemplatesBtn">管理模板</button>
+            </div>
+            <div class="my-templates-grid" id="myTemplatesGrid"></div>
           </div>
         </section>
       </main>
@@ -225,6 +234,10 @@
         <div class="modal-header">
           <h2>📝 发布Citywalk计划</h2>
           <button class="close-btn" id="closeCreateBtn">×</button>
+        </div>
+        <div class="template-quick-actions">
+          <button type="button" class="btn btn-outline" id="loadFromTemplateBtn">📋 从模板加载</button>
+          <button type="button" class="btn btn-outline" id="browsePublicTemplatesBtn">🌐 公共模板库</button>
         </div>
         <form id="createPlanForm" class="create-form">
           <div class="form-row">
@@ -271,6 +284,7 @@
           </div>
           <div class="form-actions">
             <button type="button" class="btn btn-outline" id="cancelCreateBtn">取消</button>
+            <button type="button" class="btn btn-outline" id="saveAsTemplateBtn">💾 存为模板</button>
             <button type="submit" class="btn btn-primary">发布计划 🚀</button>
           </div>
         </form>
@@ -453,6 +467,110 @@
           <div id="pendingRatingsList" class="pending-ratings-list">
           </div>
         </div>
+      </div>
+    </div>
+
+    <div id="myTemplatesModal" class="modal">
+      <div class="modal-content template-modal">
+        <div class="modal-header">
+          <h2>📋 我的路线模板</h2>
+          <button class="close-btn" id="closeMyTemplatesBtn">×</button>
+        </div>
+        <div class="template-modal-body" id="myTemplatesList"></div>
+      </div>
+    </div>
+
+    <div id="publicTemplatesModal" class="modal">
+      <div class="modal-content template-modal">
+        <div class="modal-header">
+          <h2>🌐 公共模板库</h2>
+          <button class="close-btn" id="closePublicTemplatesBtn">×</button>
+        </div>
+        <div class="template-filter-bar">
+          <select id="publicTemplateCity" class="filter-select">
+            <option value="">全部城市</option>
+          </select>
+          <select id="publicTemplateTheme" class="filter-select">
+            <option value="">全部主题</option>
+          </select>
+          <input type="text" id="publicTemplateKeyword" placeholder="🔍 搜索模板" class="template-search-input">
+        </div>
+        <div class="template-modal-body" id="publicTemplatesList"></div>
+      </div>
+    </div>
+
+    <div id="saveTemplateModal" class="modal">
+      <div class="modal-content" style="max-width: 520px;">
+        <div class="modal-header">
+          <h2>💾 保存为路线模板</h2>
+          <button class="close-btn" id="closeSaveTemplateBtn">×</button>
+        </div>
+        <form id="saveTemplateForm" class="create-form">
+          <div class="form-group">
+            <label>模板名称 *</label>
+            <input type="text" id="templateName" placeholder="为模板起一个名称" required>
+          </div>
+          <div class="form-group">
+            <label>
+              <input type="checkbox" id="templateIsPublic"> 设为公开模板（其他用户可在公共模板库中浏览使用）
+            </label>
+          </div>
+          <input type="hidden" id="templateTheme">
+          <input type="hidden" id="templateCity">
+          <input type="hidden" id="templateDescription">
+          <input type="hidden" id="templateMeetingPoint">
+          <div class="form-actions">
+            <button type="button" class="btn btn-outline" id="cancelSaveTemplateBtn">取消</button>
+            <button type="submit" class="btn btn-primary">保存模板</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div id="editTemplateModal" class="modal">
+      <div class="modal-content" style="max-width: 600px;">
+        <div class="modal-header">
+          <h2>✏️ 编辑路线模板</h2>
+          <button class="close-btn" id="closeEditTemplateBtn">×</button>
+        </div>
+        <form id="editTemplateForm" class="create-form">
+          <input type="hidden" id="editTemplateId">
+          <div class="form-group">
+            <label>模板名称 *</label>
+            <input type="text" id="editTemplateName" placeholder="为模板起一个名称" required>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>主题 *</label>
+              <select id="editTemplateTheme" required>
+                <option value="">选择主题</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>城市</label>
+              <select id="editTemplateCity">
+                <option value="">选择城市</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>集合地点</label>
+            <input type="text" id="editTemplateMeeting" placeholder="例如：人民广场地铁站5号口">
+          </div>
+          <div class="form-group">
+            <label>路线描述</label>
+            <textarea id="editTemplateDescription" rows="4" placeholder="详细介绍一下路线和亮点..."></textarea>
+          </div>
+          <div class="form-group">
+            <label>
+              <input type="checkbox" id="editTemplateIsPublic"> 设为公开模板
+            </label>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-outline" id="cancelEditTemplateBtn">取消</button>
+            <button type="submit" class="btn btn-primary">保存修改</button>
+          </div>
+        </form>
       </div>
     </div>
 

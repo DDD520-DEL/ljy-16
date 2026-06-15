@@ -7239,6 +7239,7 @@
       "created_at": "2026-06-15 11:00:55"
     }
   ],
+  "route_templates": [],
   "counters": {
     "users": 30,
     "plans": 36,
@@ -7250,6 +7251,7 @@
     "ratings": 0,
     "follows": 49,
     "feeds": 129,
-    "plan_updates": 6
+    "plan_updates": 6,
+    "route_templates": 1
   }
 }

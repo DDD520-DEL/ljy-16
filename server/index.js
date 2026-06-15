@@ -1461,6 +1461,133 @@ app.get('/api/users/:id/feeds', (req, res) => {
   }
 });
 
+app.post('/api/templates', (req, res) => {
+  try {
+    const { creator_id, name, theme, city, description, meeting_point, is_public } = req.body;
+    if (!creator_id || !name || !theme) {
+      return res.status(400).json({ error: '缺少必填字段' });
+    }
+    const stmt = db.prepare(`
+      INSERT INTO route_templates (creator_id, name, theme, city, description, meeting_point, is_public)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    const result = stmt.run(
+      creator_id, name, theme, city || '', description || '',
+      meeting_point || '', is_public ? 1 : 0
+    );
+    const tmpl = db.prepare('SELECT * FROM route_templates WHERE id = ?').get(result.lastInsertRowid);
+    const creator = db.prepare('SELECT id, username, avatar FROM users WHERE id = ?').get(creator_id);
+    tmpl.creator = creator;
+    res.json({ success: true, template: tmpl });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/users/:id/templates', (req, res) => {
+  try {
+    const templates = db.prepare(`
+      SELECT rt.*, u.username as creator_name, u.avatar as creator_avatar
+      FROM route_templates rt
+      LEFT JOIN users u ON rt.creator_id = u.id
+      WHERE rt.creator_id = ?
+      ORDER BY rt.created_at DESC
+    `).all(req.params.id);
+    templates.forEach(t => {
+      t.creator = { id: t.creator_id, username: t.creator_name || t.u_username, avatar: t.creator_avatar || t.u_avatar };
+      delete t.creator_name;
+      delete t.creator_avatar;
+      Object.keys(t).filter(k => k.startsWith('u_')).forEach(k => delete t[k]);
+    });
+    res.json({ success: true, templates });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/templates/public', (req, res) => {
+  try {
+    const { city, theme, keyword } = req.query;
+    let sql = `
+      SELECT rt.*, u.username as creator_name, u.avatar as creator_avatar
+      FROM route_templates rt
+      LEFT JOIN users u ON rt.creator_id = u.id
+      WHERE rt.is_public = 1
+    `;
+    const params = [];
+    if (city) {
+      sql += ' AND rt.city = ?';
+      params.push(city);
+    }
+    if (theme) {
+      sql += ' AND rt.theme = ?';
+      params.push(theme);
+    }
+    if (keyword) {
+      sql += ' AND (rt.name LIKE ? OR rt.description LIKE ?)';
+      params.push(`%${keyword}%`, `%${keyword}%`);
+    }
+    sql += ' ORDER BY rt.created_at DESC LIMIT 50';
+    const templates = db.prepare(sql).all(...params);
+    templates.forEach(t => {
+      t.creator = { id: t.creator_id, username: t.creator_name || t.u_username, avatar: t.creator_avatar || t.u_avatar };
+      delete t.creator_name;
+      delete t.creator_avatar;
+      Object.keys(t).filter(k => k.startsWith('u_')).forEach(k => delete t[k]);
+    });
+    res.json({ success: true, templates });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/templates/:id', (req, res) => {
+  try {
+    const templateId = req.params.id;
+    const { user_id, name, theme, city, description, meeting_point, is_public } = req.body;
+    if (!user_id) {
+      return res.status(400).json({ error: '缺少用户ID' });
+    }
+    const tmpl = db.prepare('SELECT * FROM route_templates WHERE id = ?').get(templateId);
+    if (!tmpl) {
+      return res.status(404).json({ error: '模板不存在' });
+    }
+    if (tmpl.creator_id !== user_id) {
+      return res.status(403).json({ error: '只有创建者才能编辑模板' });
+    }
+    db.prepare(`
+      UPDATE route_templates SET name = ?, theme = ?, city = ?, description = ?, meeting_point = ?, is_public = ? WHERE id = ?
+    `).run(name || tmpl.name, theme || tmpl.theme, city !== undefined ? city : tmpl.city, description !== undefined ? description : tmpl.description, meeting_point !== undefined ? meeting_point : tmpl.meeting_point, is_public !== undefined ? (is_public ? 1 : 0) : tmpl.is_public, templateId);
+    const updated = db.prepare('SELECT * FROM route_templates WHERE id = ?').get(templateId);
+    const creator = db.prepare('SELECT id, username, avatar FROM users WHERE id = ?').get(user_id);
+    updated.creator = creator;
+    res.json({ success: true, template: updated });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/templates/:id', (req, res) => {
+  try {
+    const templateId = req.params.id;
+    const { user_id } = req.body;
+    if (!user_id) {
+      return res.status(400).json({ error: '缺少用户ID' });
+    }
+    const tmpl = db.prepare('SELECT * FROM route_templates WHERE id = ?').get(templateId);
+    if (!tmpl) {
+      return res.status(404).json({ error: '模板不存在' });
+    }
+    if (tmpl.creator_id !== user_id) {
+      return res.status(403).json({ error: '只有创建者才能删除模板' });
+    }
+    db.prepare('DELETE FROM route_templates WHERE id = ?').run(templateId);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/themes', (req, res) => {
   const themes = [
     { id: 'old_building', name: '老洋房', icon: '🏛️', color: '#8B4513' },

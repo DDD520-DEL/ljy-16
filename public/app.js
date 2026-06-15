@@ -127,7 +127,7 @@ async function populateCitySelects() {
   const res = await api(`${API}/cities`);
   if (res.success) {
     const cities = res.cities;
-    ['filterCity', 'matchCity', 'popularCity', 'planCity'].forEach(id => {
+    ['filterCity', 'matchCity', 'popularCity', 'planCity', 'editTemplateCity', 'publicTemplateCity'].forEach(id => {
       const sel = document.getElementById(id);
       if (!sel) return;
       const firstOption = sel.querySelector('option');
@@ -144,7 +144,7 @@ async function populateCitySelects() {
 }
 
 async function populateThemeSelects() {
-  ['matchTheme', 'planTheme'].forEach(id => {
+  ['matchTheme', 'planTheme', 'editTemplateTheme', 'publicTemplateTheme'].forEach(id => {
     const sel = document.getElementById(id);
     if (!sel) return;
     const firstOption = sel.querySelector('option');
@@ -476,6 +476,8 @@ async function loadMyPlans() {
       </div>
     `;
   }
+
+  loadMyTemplatesPreview();
 }
 
 function showPendingRatingsList() {
@@ -2206,9 +2208,331 @@ function initEventListeners() {
   document.getElementById('matchCity').addEventListener('change', loadMatchSuggestions);
   document.getElementById('matchTheme').addEventListener('change', loadMatchSuggestions);
   document.getElementById('popularCity').addEventListener('change', loadPopularRoutes);
+
+  document.getElementById('loadFromTemplateBtn').addEventListener('click', () => {
+    openMyTemplatesModal('select');
+  });
+  document.getElementById('browsePublicTemplatesBtn').addEventListener('click', () => {
+    openPublicTemplatesModal();
+  });
+  document.getElementById('saveAsTemplateBtn').addEventListener('click', () => {
+    openSaveTemplateModal();
+  });
+  document.getElementById('manageTemplatesBtn').addEventListener('click', () => {
+    openMyTemplatesModal('manage');
+  });
+  document.getElementById('closeMyTemplatesBtn').addEventListener('click', () => {
+    closeModal('myTemplatesModal');
+  });
+  document.getElementById('myTemplatesModal').addEventListener('click', (e) => {
+    if (e.target.id === 'myTemplatesModal') closeModal('myTemplatesModal');
+  });
+  document.getElementById('closePublicTemplatesBtn').addEventListener('click', () => {
+    closeModal('publicTemplatesModal');
+  });
+  document.getElementById('publicTemplatesModal').addEventListener('click', (e) => {
+    if (e.target.id === 'publicTemplatesModal') closeModal('publicTemplatesModal');
+  });
+  document.getElementById('closeSaveTemplateBtn').addEventListener('click', () => {
+    closeModal('saveTemplateModal');
+  });
+  document.getElementById('cancelSaveTemplateBtn').addEventListener('click', () => {
+    closeModal('saveTemplateModal');
+  });
+  document.getElementById('saveTemplateModal').addEventListener('click', (e) => {
+    if (e.target.id === 'saveTemplateModal') closeModal('saveTemplateModal');
+  });
+  document.getElementById('saveTemplateForm').addEventListener('submit', submitSaveTemplate);
+  document.getElementById('closeEditTemplateBtn').addEventListener('click', () => {
+    closeModal('editTemplateModal');
+  });
+  document.getElementById('cancelEditTemplateBtn').addEventListener('click', () => {
+    closeModal('editTemplateModal');
+  });
+  document.getElementById('editTemplateModal').addEventListener('click', (e) => {
+    if (e.target.id === 'editTemplateModal') closeModal('editTemplateModal');
+  });
+  document.getElementById('editTemplateForm').addEventListener('submit', submitEditTemplate);
+
+  document.getElementById('publicTemplateCity').addEventListener('change', loadPublicTemplates);
+  document.getElementById('publicTemplateTheme').addEventListener('change', loadPublicTemplates);
+  let publicTemplateSearchTimer;
+  document.getElementById('publicTemplateKeyword').addEventListener('input', () => {
+    clearTimeout(publicTemplateSearchTimer);
+    publicTemplateSearchTimer = setTimeout(loadPublicTemplates, 300);
+  });
 }
 
 let notificationCheckInterval = null;
+
+let myTemplatesMode = 'manage';
+
+async function loadMyTemplatesPreview() {
+  if (!currentUser) return;
+  const grid = document.getElementById('myTemplatesGrid');
+  if (!grid) return;
+  const res = await api(`${API}/users/${currentUser.id}/templates`);
+  if (res.success && res.templates.length > 0) {
+    const preview = res.templates.slice(0, 4);
+    grid.innerHTML = preview.map(t => {
+      const theme = getThemeInfo(t.theme);
+      const badge = t.is_public ? '<span class="template-public-badge">🌐 公开</span>' : '<span class="template-private-badge">🔒 私有</span>';
+      return `
+        <div class="my-template-card" onclick="useTemplate(${t.id})">
+          <div class="my-template-card-badge">${badge}</div>
+          <div class="my-template-card-title">
+            <span>${theme.icon}</span>
+            <span>${t.name}</span>
+          </div>
+          <div class="my-template-card-desc">${t.description || '暂无描述'}</div>
+          <div class="my-template-card-meta">
+            ${t.city ? `<span>📍 ${t.city}</span>` : ''}
+            ${t.meeting_point ? `<span>🚩 ${t.meeting_point}</span>` : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
+  } else {
+    grid.innerHTML = `
+      <div class="empty-state" style="grid-column: 1/-1;">
+        <div class="empty-state-icon">📋</div>
+        <h3>还没有路线模板</h3>
+        <p>创建计划时可保存为模板，下次一键复用！</p>
+      </div>
+    `;
+  }
+}
+
+async function openMyTemplatesModal(mode) {
+  myTemplatesMode = mode || 'manage';
+  openModal('myTemplatesModal');
+  await loadMyTemplatesList();
+}
+
+async function loadMyTemplatesList() {
+  if (!currentUser) return;
+  const container = document.getElementById('myTemplatesList');
+  const res = await api(`${API}/users/${currentUser.id}/templates`);
+  if (res.success && res.templates.length > 0) {
+    container.innerHTML = res.templates.map(t => renderTemplateCard(t, true)).join('');
+  } else {
+    container.innerHTML = `
+      <div class="template-empty">
+        <div class="template-empty-icon">📋</div>
+        <h3>还没有路线模板</h3>
+        <p>发布计划时可以保存为模板，方便下次快速创建</p>
+      </div>
+    `;
+  }
+}
+
+function renderTemplateCard(t, isOwner) {
+  const theme = getThemeInfo(t.theme);
+  const badge = t.is_public ? '<span class="template-public-badge">🌐 公开</span>' : '<span class="template-private-badge">🔒 私有</span>';
+  let actions = '';
+  if (myTemplatesMode === 'select') {
+    actions = `
+      <button class="template-action-btn use-btn" onclick="event.stopPropagation(); useTemplate(${t.id})">使用模板</button>
+      <button class="template-action-btn" onclick="event.stopPropagation(); openEditTemplateModal(${t.id})">编辑</button>
+      <button class="template-action-btn delete-btn" onclick="event.stopPropagation(); deleteTemplate(${t.id})">删除</button>
+    `;
+  } else if (isOwner) {
+    actions = `
+      <button class="template-action-btn use-btn" onclick="event.stopPropagation(); useTemplate(${t.id})">使用</button>
+      <button class="template-action-btn" onclick="event.stopPropagation(); openEditTemplateModal(${t.id})">编辑</button>
+      <button class="template-action-btn delete-btn" onclick="event.stopPropagation(); deleteTemplate(${t.id})">删除</button>
+    `;
+  } else {
+    actions = `
+      <button class="template-action-btn use-btn" onclick="event.stopPropagation(); useTemplate(${t.id})">使用模板</button>
+    `;
+  }
+  const creatorHtml = !isOwner ? `
+    <div class="template-card-creator">
+      <div class="template-card-creator-avatar">${t.creator?.avatar || '🧑'}</div>
+      <span>${t.creator?.username || '未知'}</span>
+    </div>
+  ` : '';
+  return `
+    <div class="template-card">
+      <div class="template-card-header">
+        <div>
+          <div class="template-card-title">${t.name}</div>
+          <div class="template-card-meta">
+            <span>${theme.icon} ${theme.name}</span>
+            ${t.city ? `<span>📍 ${t.city}</span>` : ''}
+            ${badge}
+          </div>
+        </div>
+      </div>
+      ${t.description ? `<div class="template-card-desc">${t.description}</div>` : ''}
+      ${t.meeting_point ? `<div class="template-card-meta" style="margin-bottom:12px;"><span>🚩 集合：${t.meeting_point}</span></div>` : ''}
+      <div class="template-card-footer">
+        ${creatorHtml}
+        <div class="template-card-actions">${actions}</div>
+      </div>
+    </div>
+  `;
+}
+
+async function openPublicTemplatesModal() {
+  openModal('publicTemplatesModal');
+  await loadPublicTemplates();
+}
+
+async function loadPublicTemplates() {
+  const container = document.getElementById('publicTemplatesList');
+  const city = document.getElementById('publicTemplateCity').value;
+  const theme = document.getElementById('publicTemplateTheme').value;
+  const keyword = document.getElementById('publicTemplateKeyword').value;
+  const params = new URLSearchParams();
+  if (city) params.set('city', city);
+  if (theme) params.set('theme', theme);
+  if (keyword) params.set('keyword', keyword);
+  const res = await api(`${API}/templates/public?${params.toString()}`);
+  if (res.success && res.templates.length > 0) {
+    container.innerHTML = res.templates.map(t => renderTemplateCard(t, false)).join('');
+  } else {
+    container.innerHTML = `
+      <div class="template-empty">
+        <div class="template-empty-icon">🌐</div>
+        <h3>暂无公共模板</h3>
+        <p>成为第一个分享路线模板的人吧！</p>
+      </div>
+    `;
+  }
+}
+
+function openSaveTemplateModal() {
+  const theme = document.getElementById('planTheme').value;
+  const city = document.getElementById('planCity').value;
+  const description = document.getElementById('planDescription').value;
+  const meetingPoint = document.getElementById('planMeeting').value;
+  if (!theme) {
+    showToast('请先选择主题再保存模板', 'error');
+    return;
+  }
+  document.getElementById('templateTheme').value = theme;
+  document.getElementById('templateCity').value = city;
+  document.getElementById('templateDescription').value = description;
+  document.getElementById('templateMeetingPoint').value = meetingPoint;
+  document.getElementById('templateName').value = '';
+  document.getElementById('templateIsPublic').checked = false;
+  openModal('saveTemplateModal');
+}
+
+async function submitSaveTemplate(e) {
+  e.preventDefault();
+  if (!currentUser) return;
+  const data = {
+    creator_id: currentUser.id,
+    name: document.getElementById('templateName').value,
+    theme: document.getElementById('templateTheme').value,
+    city: document.getElementById('templateCity').value,
+    description: document.getElementById('templateDescription').value,
+    meeting_point: document.getElementById('templateMeetingPoint').value,
+    is_public: document.getElementById('templateIsPublic').checked
+  };
+  const res = await api(`${API}/templates`, {
+    method: 'POST',
+    body: JSON.stringify(data)
+  });
+  if (res.success) {
+    showToast('模板保存成功！', 'success');
+    closeModal('saveTemplateModal');
+    loadMyTemplatesPreview();
+  } else {
+    showToast(res.error || '保存失败', 'error');
+  }
+}
+
+async function openEditTemplateModal(templateId) {
+  if (!currentUser) return;
+  const res = await api(`${API}/users/${currentUser.id}/templates`);
+  if (!res.success) return;
+  const tmpl = res.templates.find(t => t.id === templateId);
+  if (!tmpl) return;
+  document.getElementById('editTemplateId').value = tmpl.id;
+  document.getElementById('editTemplateName').value = tmpl.name;
+  document.getElementById('editTemplateTheme').value = tmpl.theme;
+  document.getElementById('editTemplateCity').value = tmpl.city || '';
+  document.getElementById('editTemplateMeeting').value = tmpl.meeting_point || '';
+  document.getElementById('editTemplateDescription').value = tmpl.description || '';
+  document.getElementById('editTemplateIsPublic').checked = !!tmpl.is_public;
+  closeModal('myTemplatesModal');
+  openModal('editTemplateModal');
+}
+
+async function submitEditTemplate(e) {
+  e.preventDefault();
+  if (!currentUser) return;
+  const templateId = document.getElementById('editTemplateId').value;
+  const data = {
+    user_id: currentUser.id,
+    name: document.getElementById('editTemplateName').value,
+    theme: document.getElementById('editTemplateTheme').value,
+    city: document.getElementById('editTemplateCity').value,
+    meeting_point: document.getElementById('editTemplateMeeting').value,
+    description: document.getElementById('editTemplateDescription').value,
+    is_public: document.getElementById('editTemplateIsPublic').checked
+  };
+  const res = await api(`${API}/templates/${templateId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data)
+  });
+  if (res.success) {
+    showToast('模板更新成功！', 'success');
+    closeModal('editTemplateModal');
+    loadMyTemplatesPreview();
+  } else {
+    showToast(res.error || '更新失败', 'error');
+  }
+}
+
+async function deleteTemplate(templateId) {
+  if (!currentUser) return;
+  if (!confirm('确定要删除此模板吗？')) return;
+  const res = await api(`${API}/templates/${templateId}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ user_id: currentUser.id })
+  });
+  if (res.success) {
+    showToast('模板已删除', 'success');
+    loadMyTemplatesList();
+    loadMyTemplatesPreview();
+  } else {
+    showToast(res.error || '删除失败', 'error');
+  }
+}
+
+async function useTemplate(templateId) {
+  if (!currentUser) return;
+  const res = await api(`${API}/users/${currentUser.id}/templates`);
+  if (!res.success) return;
+  const tmpl = res.templates.find(t => t.id === templateId);
+  if (!tmpl) {
+    const pubRes = await api(`${API}/templates/public`);
+    if (pubRes.success) {
+      const pubTmpl = pubRes.templates.find(t => t.id === templateId);
+      if (!pubTmpl) return;
+      applyTemplateToForm(pubTmpl);
+    }
+    return;
+  }
+  applyTemplateToForm(tmpl);
+}
+
+function applyTemplateToForm(tmpl) {
+  closeModal('myTemplatesModal');
+  closeModal('publicTemplatesModal');
+  document.getElementById('createPlanModal').classList.remove('hidden');
+  if (tmpl.theme) document.getElementById('planTheme').value = tmpl.theme;
+  if (tmpl.city) document.getElementById('planCity').value = tmpl.city;
+  if (tmpl.description) document.getElementById('planDescription').value = tmpl.description;
+  if (tmpl.meeting_point) document.getElementById('planMeeting').value = tmpl.meeting_point;
+  if (tmpl.name) document.getElementById('planTitle').value = tmpl.name;
+  showToast('模板已加载，请补充时间和人数后发布', 'success');
+}
 
 async function init() {
   // 确保所有模态框初始隐藏
@@ -2220,6 +2544,10 @@ async function init() {
   document.getElementById('commentModal').classList.add('hidden');
   document.getElementById('ratingModal').classList.add('hidden');
   document.getElementById('pendingRatingsModal').classList.add('hidden');
+  document.getElementById('myTemplatesModal').classList.add('hidden');
+  document.getElementById('publicTemplatesModal').classList.add('hidden');
+  document.getElementById('saveTemplateModal').classList.add('hidden');
+  document.getElementById('editTemplateModal').classList.add('hidden');
   document.getElementById('toast').classList.add('hidden');
   
   initEventListeners();
