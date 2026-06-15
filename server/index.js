@@ -227,6 +227,31 @@ app.get('/api/plans/:id', (req, res) => {
     }
     plan.notes = notes;
 
+    const updates = db.prepare(`
+      SELECT pu.*, u.username as updater_name, u.avatar as updater_avatar
+      FROM plan_updates pu
+      LEFT JOIN users u ON pu.updated_by = u.id
+      WHERE pu.plan_id = ?
+      ORDER BY pu.created_at DESC
+    `).all(plan.id).map(u => {
+      let changes = [];
+      let oldValues = {};
+      let newValues = {};
+      try { changes = JSON.parse(u.changes || '[]'); } catch(e) {}
+      try { oldValues = JSON.parse(u.old_values || '{}'); } catch(e) {}
+      try { newValues = JSON.parse(u.new_values || '{}'); } catch(e) {}
+      return {
+        ...u,
+        changes,
+        old_values: oldValues,
+        new_values: newValues,
+        updater_name: u.updater_name || u.u_username,
+        updater_avatar: u.updater_avatar || u.u_avatar
+      };
+    });
+    plan.updates = updates;
+    plan.latest_update = updates[0] || null;
+
     delete plan.creator_name;
     delete plan.creator_avatar;
 
@@ -332,6 +357,245 @@ app.post('/api/plans/:id/complete', (req, res) => {
       });
     }
     res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/plans/:id', (req, res) => {
+  try {
+    const planId = req.params.id;
+    const { user_id, title, description, meeting_point, duration_hours } = req.body;
+
+    if (!user_id) {
+      return res.status(400).json({ error: '缺少用户ID' });
+    }
+
+    const plan = db.prepare('SELECT * FROM citywalk_plans WHERE id = ?').get(planId);
+    if (!plan) {
+      return res.status(404).json({ error: '计划不存在' });
+    }
+
+    if (plan.creator_id !== user_id) {
+      return res.status(403).json({ error: '只有创建者才能编辑计划' });
+    }
+
+    if (plan.status !== 'recruiting') {
+      return res.status(400).json({ error: '只能编辑招募中的计划' });
+    }
+
+    const startTime = new Date(plan.start_time);
+    if (startTime <= new Date()) {
+      return res.status(400).json({ error: '活动已开始，无法编辑' });
+    }
+
+    const changes = [];
+    const oldValues = {};
+    const newValues = {};
+
+    if (title !== undefined && title !== plan.title) {
+      changes.push('title');
+      oldValues.title = plan.title;
+      newValues.title = title;
+    }
+    if (description !== undefined && description !== plan.description) {
+      changes.push('description');
+      oldValues.description = plan.description;
+      newValues.description = description;
+    }
+    if (meeting_point !== undefined && meeting_point !== plan.meeting_point) {
+      changes.push('meeting_point');
+      oldValues.meeting_point = plan.meeting_point;
+      newValues.meeting_point = meeting_point;
+    }
+    if (duration_hours !== undefined && Number(duration_hours) !== Number(plan.duration_hours)) {
+      changes.push('duration_hours');
+      oldValues.duration_hours = plan.duration_hours;
+      newValues.duration_hours = duration_hours;
+    }
+
+    if (changes.length === 0) {
+      return res.json({ success: true, plan, changes: [] });
+    }
+
+    db.transaction(() => {
+      const setClauses = [];
+      const params = [];
+
+      if (title !== undefined) {
+        setClauses.push('title = ?');
+        params.push(title);
+      }
+      if (description !== undefined) {
+        setClauses.push('description = ?');
+        params.push(description);
+      }
+      if (meeting_point !== undefined) {
+        setClauses.push('meeting_point = ?');
+        params.push(meeting_point);
+      }
+      if (duration_hours !== undefined) {
+        setClauses.push('duration_hours = ?');
+        params.push(duration_hours);
+      }
+
+      params.push(planId);
+
+      const sql = `UPDATE citywalk_plans SET ${setClauses.join(', ')} WHERE id = ?`;
+      db.prepare(sql).run(...params);
+
+      const updateStmt = db.prepare(`
+        INSERT INTO plan_updates (plan_id, updated_by, changes, old_values, new_values)
+        VALUES (?, ?, ?, ?, ?)
+      `);
+      updateStmt.run(
+        planId,
+        user_id,
+        JSON.stringify(changes),
+        JSON.stringify(oldValues),
+        JSON.stringify(newValues)
+      );
+
+      const participants = db.prepare('SELECT user_id FROM plan_participants WHERE plan_id = ? AND user_id != ?').all(planId, user_id);
+      const notifStmt = db.prepare(`
+        INSERT INTO user_notifications (user_id, type, content, related_id, related_type, from_user_id, is_read)
+        VALUES (?, 'plan_update', ?, ?, 'plan', ?, 0)
+      `);
+      participants.forEach(p => {
+        notifStmt.run(p.user_id, `计划"${newValues.title || plan.title}"已更新`, planId, user_id);
+      });
+    });
+
+    const updatedPlan = db.prepare(`
+      SELECT p.*, u.username as creator_name, u.avatar as creator_avatar 
+      FROM citywalk_plans p 
+      LEFT JOIN users u ON p.creator_id = u.id 
+      WHERE p.id = ?
+    `).get(planId);
+
+    updatedPlan.creator = {
+      id: updatedPlan.creator_id,
+      username: updatedPlan.creator_name,
+      avatar: updatedPlan.creator_avatar
+    };
+    delete updatedPlan.creator_name;
+    delete updatedPlan.creator_avatar;
+
+    const latestUpdate = db.prepare(`
+      SELECT pu.*, u.username as updater_name, u.avatar as updater_avatar
+      FROM plan_updates pu
+      LEFT JOIN users u ON pu.updated_by = u.id
+      WHERE pu.plan_id = ?
+      ORDER BY pu.created_at DESC
+      LIMIT 1
+    `).get(planId);
+
+    res.json({ 
+      success: true, 
+      plan: updatedPlan, 
+      changes,
+      latest_update: latestUpdate
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/plans/:id/cancel', (req, res) => {
+  try {
+    const planId = req.params.id;
+    const { user_id, reason } = req.body;
+
+    if (!user_id) {
+      return res.status(400).json({ error: '缺少用户ID' });
+    }
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({ error: '请填写取消原因' });
+    }
+
+    const plan = db.prepare('SELECT * FROM citywalk_plans WHERE id = ?').get(planId);
+    if (!plan) {
+      return res.status(404).json({ error: '计划不存在' });
+    }
+
+    if (plan.creator_id !== user_id) {
+      return res.status(403).json({ error: '只有创建者才能取消计划' });
+    }
+
+    if (plan.status === 'completed') {
+      return res.status(400).json({ error: '已完成的活动不能取消' });
+    }
+    if (plan.status === 'cancelled') {
+      return res.status(400).json({ error: '该计划已取消' });
+    }
+
+    const startTime = new Date(plan.start_time);
+    if (startTime <= new Date()) {
+      return res.status(400).json({ error: '活动已开始，无法取消' });
+    }
+
+    db.transaction(() => {
+      db.prepare("UPDATE citywalk_plans SET status = 'cancelled', cancel_reason = ? WHERE id = ?").run(reason.trim(), planId);
+
+      const participants = db.prepare('SELECT user_id FROM plan_participants WHERE plan_id = ? AND user_id != ?').all(planId, user_id);
+      const notifStmt = db.prepare(`
+        INSERT INTO user_notifications (user_id, type, content, related_id, related_type, from_user_id, is_read)
+        VALUES (?, 'plan_cancel', ?, ?, 'plan', ?, 0)
+      `);
+      participants.forEach(p => {
+        notifStmt.run(p.user_id, `计划"${plan.title}"已取消：${reason.trim()}`, planId, user_id);
+      });
+    });
+
+    const updatedPlan = db.prepare(`
+      SELECT p.*, u.username as creator_name, u.avatar as creator_avatar 
+      FROM citywalk_plans p 
+      LEFT JOIN users u ON p.creator_id = u.id 
+      WHERE p.id = ?
+    `).get(planId);
+
+    updatedPlan.creator = {
+      id: updatedPlan.creator_id,
+      username: updatedPlan.creator_name,
+      avatar: updatedPlan.creator_avatar
+    };
+    delete updatedPlan.creator_name;
+    delete updatedPlan.creator_avatar;
+
+    res.json({ success: true, plan: updatedPlan });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/plans/:id/updates', (req, res) => {
+  try {
+    const planId = req.params.id;
+    
+    const updates = db.prepare(`
+      SELECT pu.*, u.username as updater_name, u.avatar as updater_avatar
+      FROM plan_updates pu
+      LEFT JOIN users u ON pu.updated_by = u.id
+      WHERE pu.plan_id = ?
+      ORDER BY pu.created_at DESC
+    `).all(planId).map(u => {
+      let changes = [];
+      let oldValues = {};
+      let newValues = {};
+      try { changes = JSON.parse(u.changes || '[]'); } catch(e) {}
+      try { oldValues = JSON.parse(u.old_values || '{}'); } catch(e) {}
+      try { newValues = JSON.parse(u.new_values || '{}'); } catch(e) {}
+      return {
+        ...u,
+        changes,
+        old_values: oldValues,
+        new_values: newValues,
+        updater_name: u.updater_name || u.u_username,
+        updater_avatar: u.updater_avatar || u.u_avatar
+      };
+    });
+
+    res.json({ success: true, updates });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -277,6 +277,64 @@
       </div>
     </div>
 
+    <div id="editPlanModal" class="modal">
+      <div class="modal-content create-modal">
+        <div class="modal-header">
+          <h2>✏️ 编辑Citywalk计划</h2>
+          <button class="close-btn" id="closeEditPlanBtn">×</button>
+        </div>
+        <form id="editPlanForm" class="create-form">
+          <input type="hidden" id="editPlanId">
+          <div class="form-row">
+            <div class="form-group">
+              <label>计划标题 *</label>
+              <input type="text" id="editPlanTitle" placeholder="例如：法租界老洋房深度游" required>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>活动时长（小时）</label>
+              <input type="number" id="editPlanDuration" value="3" min="1" max="24" step="0.5">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>集合地点</label>
+            <input type="text" id="editPlanMeeting" placeholder="例如：人民广场地铁站5号口">
+          </div>
+          <div class="form-group">
+            <label>路线描述</label>
+            <textarea id="editPlanDescription" rows="4" placeholder="详细介绍一下你的Citywalk路线和亮点..."></textarea>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-outline" id="cancelEditPlanBtn">取消</button>
+            <button type="submit" class="btn btn-primary">保存修改 ✨</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div id="cancelPlanModal" class="modal">
+      <div class="modal-content" style="max-width: 500px;">
+        <div class="modal-header">
+          <h2>🚫 取消Citywalk计划</h2>
+          <button class="close-btn" id="closeCancelPlanBtn">×</button>
+        </div>
+        <div style="padding: 0 32px 32px;">
+          <div class="form-group">
+            <label>取消原因 *</label>
+            <textarea id="cancelPlanReason" rows="4" placeholder="请告诉大家取消的原因..." required></textarea>
+          </div>
+          <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 20px;">
+            ⚠️ 取消后将通知所有已加入的参与者，且无法恢复。
+          </p>
+          <div class="form-actions">
+            <button type="button" class="btn btn-outline" id="cancelPlanCancelBtn">返回</button>
+            <button type="button" class="btn btn-primary" style="background: var(--danger);" id="confirmCancelPlanBtn">确认取消</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div id="noteModal" class="modal">
       <div class="modal-content note-modal">
         <div class="modal-header">

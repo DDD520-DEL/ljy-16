@@ -63,6 +63,7 @@ function getThemeInfo(themeId) {
 function getStatusLabel(status) {
   if (status === 'recruiting') return { text: '招募中', cls: 'status-recruiting' };
   if (status === 'completed') return { text: '已完成', cls: 'status-completed' };
+  if (status === 'cancelled') return { text: '已取消', cls: 'status-cancelled' };
   return { text: status, cls: '' };
 }
 
@@ -578,6 +579,12 @@ async function openPlanDetail(planId) {
   const ratingsList = ratingsRes?.ratings || [];
   const hasMyRating = currentUser && ratingsList.some(r => r.user_id === currentUser.id);
   const canRate = plan.status === 'completed' && isJoined && !isCreator && currentUser && !hasMyRating;
+  
+  const hasUpdates = plan.updates && plan.updates.length > 0;
+  const latestUpdate = plan.latest_update;
+  const isCancelled = plan.status === 'cancelled';
+  const canEdit = isCreator && plan.status === 'recruiting' && new Date(plan.start_time) > new Date();
+  const canCancel = isCreator && plan.status === 'recruiting' && new Date(plan.start_time) > new Date();
 
   const participantsHtml = (plan.participants || []).map(p => {
     const isMe = currentUser && Number(p.id) === Number(currentUser.id);
@@ -673,6 +680,21 @@ async function openPlanDetail(planId) {
               </button>
             </div>
             <h2 class="detail-title">${plan.title}</h2>
+            ${hasUpdates ? `
+              <div class="plan-update-badge" onclick="toggleUpdateSummary()">
+                <span class="update-icon">📝</span>
+                <span class="update-text">计划已更新</span>
+                <span class="update-time">${formatCommentTime(latestUpdate.created_at)}</span>
+                <span class="update-toggle">▼</span>
+              </div>
+            ` : ''}
+            ${isCancelled && plan.cancel_reason ? `
+              <div class="plan-cancel-reason">
+                <span class="cancel-icon">🚫</span>
+                <span class="cancel-label">取消原因：</span>
+                <span class="cancel-text">${plan.cancel_reason}</span>
+              </div>
+            ` : ''}
             ${ratingsStats && ratingsStats.count > 0 ? `
               <div class="plan-rating-badge">
                 <span class="plan-rating-score">${ratingsStats.avg_overall.toFixed(1)}</span>
@@ -715,6 +737,28 @@ async function openPlanDetail(planId) {
         <p>${plan.description || '暂无详细描述'}</p>
       </div>
 
+      ${hasUpdates ? `
+        <div class="detail-section" id="updateSummarySection" style="display: none;">
+          <h3>📝 更新历史 (${plan.updates.length})</h3>
+          <div class="updates-list">
+            ${plan.updates.map(u => `
+              <div class="update-item">
+                <div class="update-item-header">
+                  <div class="update-item-user">
+                    <span class="update-item-avatar">${u.updater_avatar || '👤'}</span>
+                    <span class="update-item-name">${u.updater_name || '创建者'}</span>
+                  </div>
+                  <span class="update-item-time">${formatCommentTime(u.created_at)}</span>
+                </div>
+                <div class="update-item-changes">
+                  ${renderChangesSummary(u)}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
+
       <div class="detail-section">
         <h3>👥 参与搭子 (${plan.participants?.length || 0})</h3>
         <div class="participants-list">${participantsHtml}</div>
@@ -743,7 +787,11 @@ async function openPlanDetail(planId) {
         ${plan.status === 'recruiting' ? (
           isJoined ? `
             ${!isCreator ? `<button class="btn btn-outline" onclick="leavePlan(${plan.id})">🚪 退出计划</button>` : ''}
-            ${isCreator ? `<button class="btn btn-primary" onclick="completePlan(${plan.id})">✅ 标记完成</button>` : 
+            ${isCreator ? `
+              <button class="btn btn-outline" onclick="openEditPlanModal(${plan.id})">✏️ 编辑计划</button>
+              <button class="btn btn-outline" style="color: var(--danger); border-color: var(--danger);" onclick="openCancelPlanModal(${plan.id})">🚫 取消活动</button>
+              <button class="btn btn-primary" onclick="completePlan(${plan.id})">✅ 标记完成</button>
+            ` : 
               `<button class="btn btn-outline" disabled>✓ 已加入</button>`}
           ` : (
             isFull ? 
@@ -751,6 +799,7 @@ async function openPlanDetail(planId) {
               `<button class="btn btn-primary" onclick="joinPlan(${plan.id})">🤝 加入计划</button>`
           )
         ) : ''}
+        ${isCancelled ? `<button class="btn btn-outline" disabled>🚫 已取消</button>` : ''}
         <button class="btn btn-outline" onclick="closeDetailModal()">关闭</button>
       </div>
     </div>
@@ -820,6 +869,152 @@ async function completePlan(planId) {
 
 function closeDetailModal() {
   document.getElementById('planDetailModal').classList.add('hidden');
+}
+
+function renderChangesSummary(update) {
+  if (!update.changes || update.changes.length === 0) return '';
+  
+  const fieldLabels = {
+    title: '标题',
+    description: '路线描述',
+    meeting_point: '集合地点',
+    duration_hours: '活动时长'
+  };
+  
+  const changes = update.changes.map(field => {
+    const label = fieldLabels[field] || field;
+    const oldVal = update.old_values[field];
+    const newVal = update.new_values[field];
+    
+    if (field === 'duration_hours') {
+      return `
+        <div class="change-item">
+          <span class="change-label">${label}</span>
+          <span class="change-old">${oldVal}小时</span>
+          <span class="change-arrow">→</span>
+          <span class="change-new">${newVal}小时</span>
+        </div>
+      `;
+    }
+    
+    return `
+      <div class="change-item">
+        <span class="change-label">${label}</span>
+        <span class="change-old">${oldVal || '未设置'}</span>
+        <span class="change-arrow">→</span>
+        <span class="change-new">${newVal || '未设置'}</span>
+      </div>
+    `;
+  }).join('');
+  
+  return changes;
+}
+
+function toggleUpdateSummary() {
+  const section = document.getElementById('updateSummarySection');
+  if (section) {
+    if (section.style.display === 'none') {
+      section.style.display = 'block';
+      section.style.animation = 'fadeIn 0.3s ease';
+    } else {
+      section.style.display = 'none';
+    }
+  }
+}
+
+let currentEditPlanId = null;
+
+async function openEditPlanModal(planId) {
+  const res = await api(`${API}/plans/${planId}`);
+  if (!res.success) {
+    showToast('加载计划详情失败', 'error');
+    return;
+  }
+  
+  const plan = res.plan;
+  currentEditPlanId = planId;
+  
+  document.getElementById('editPlanId').value = planId;
+  document.getElementById('editPlanTitle').value = plan.title;
+  document.getElementById('editPlanDuration').value = plan.duration_hours;
+  document.getElementById('editPlanMeeting').value = plan.meeting_point || '';
+  document.getElementById('editPlanDescription').value = plan.description || '';
+  
+  document.getElementById('editPlanModal').classList.remove('hidden');
+}
+
+function closeEditPlanModal() {
+  document.getElementById('editPlanModal').classList.add('hidden');
+  currentEditPlanId = null;
+}
+
+async function submitEditPlan(e) {
+  e.preventDefault();
+  if (!currentUser || !currentEditPlanId) return;
+  
+  const data = {
+    user_id: currentUser.id,
+    title: document.getElementById('editPlanTitle').value,
+    duration_hours: parseFloat(document.getElementById('editPlanDuration').value),
+    meeting_point: document.getElementById('editPlanMeeting').value,
+    description: document.getElementById('editPlanDescription').value
+  };
+  
+  const res = await api(`${API}/plans/${currentEditPlanId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data)
+  });
+  
+  if (res.success) {
+    showToast('计划已更新！✨', 'success');
+    closeEditPlanModal();
+    openPlanDetail(currentEditPlanId);
+    refreshCurrentTab();
+  } else {
+    showToast(res.error || '更新失败', 'error');
+  }
+}
+
+let currentCancelPlanId = null;
+
+function openCancelPlanModal(planId) {
+  currentCancelPlanId = planId;
+  document.getElementById('cancelPlanReason').value = '';
+  document.getElementById('cancelPlanModal').classList.remove('hidden');
+}
+
+function closeCancelPlanModal() {
+  document.getElementById('cancelPlanModal').classList.add('hidden');
+  currentCancelPlanId = null;
+}
+
+async function submitCancelPlan() {
+  if (!currentUser || !currentCancelPlanId) return;
+  
+  const reason = document.getElementById('cancelPlanReason').value.trim();
+  if (!reason) {
+    showToast('请填写取消原因', 'error');
+    return;
+  }
+  
+  if (!confirm('确定要取消这个活动吗？取消后将通知所有参与者，且无法恢复。')) return;
+  
+  const res = await api(`${API}/plans/${currentCancelPlanId}/cancel`, {
+    method: 'POST',
+    body: JSON.stringify({
+      user_id: currentUser.id,
+      reason: reason
+    })
+  });
+  
+  if (res.success) {
+    showToast('活动已取消，已通知所有参与者', 'success');
+    closeCancelPlanModal();
+    closeDetailModal();
+    refreshCurrentTab();
+  } else {
+    showToast(res.error || '取消失败', 'error');
+  }
 }
 
 async function likeNote(noteId, el) {
@@ -1253,7 +1448,23 @@ function renderNotifications(notifications) {
   }
   
   list.innerHTML = notifications.map(n => {
-    const typeText = n.type === 'note_comment' ? '评论了你的笔记' : '回复了你的评论';
+    let typeText = '回复了你的评论';
+    let icon = '📅';
+    
+    if (n.type === 'note_comment') {
+      typeText = '评论了你的笔记';
+      icon = '📝';
+    } else if (n.type === 'plan_update') {
+      typeText = '更新了计划';
+      icon = '📝';
+    } else if (n.type === 'plan_cancel') {
+      typeText = '取消了计划';
+      icon = '🚫';
+    } else if (n.type === 'join_plan') {
+      typeText = '加入了你的计划';
+      icon = '🤝';
+    }
+    
     const relatedTitle = n.note_title || n.plan_title || '';
     
     return `
@@ -1265,7 +1476,7 @@ function renderNotifications(notifications) {
             <span>${typeText}</span>
           </div>
           <div class="notification-preview">${n.content}</div>
-          ${relatedTitle ? `<div class="notification-related">${n.note_title ? '📝 ' : '📅 '}${relatedTitle}</div>` : ''}
+          ${relatedTitle ? `<div class="notification-related">${icon} ${relatedTitle}</div>` : ''}
           <div class="notification-time">${formatCommentTime(n.created_at)}</div>
         </div>
       </div>
@@ -1934,6 +2145,20 @@ function initEventListeners() {
     if (e.target.id === 'createPlanModal') document.getElementById('createPlanModal').classList.add('hidden');
   });
 
+  document.getElementById('closeEditPlanBtn').addEventListener('click', closeEditPlanModal);
+  document.getElementById('cancelEditPlanBtn').addEventListener('click', closeEditPlanModal);
+  document.getElementById('editPlanForm').addEventListener('submit', submitEditPlan);
+  document.getElementById('editPlanModal').addEventListener('click', (e) => {
+    if (e.target.id === 'editPlanModal') closeEditPlanModal();
+  });
+
+  document.getElementById('closeCancelPlanBtn').addEventListener('click', closeCancelPlanModal);
+  document.getElementById('cancelPlanCancelBtn').addEventListener('click', closeCancelPlanModal);
+  document.getElementById('confirmCancelPlanBtn').addEventListener('click', submitCancelPlan);
+  document.getElementById('cancelPlanModal').addEventListener('click', (e) => {
+    if (e.target.id === 'cancelPlanModal') closeCancelPlanModal();
+  });
+
   document.getElementById('closeCommentBtn').addEventListener('click', closeCommentModal);
   document.getElementById('commentModal').addEventListener('click', (e) => {
     if (e.target.id === 'commentModal') closeCommentModal();
@@ -1989,6 +2214,8 @@ async function init() {
   // 确保所有模态框初始隐藏
   document.getElementById('planDetailModal').classList.add('hidden');
   document.getElementById('createPlanModal').classList.add('hidden');
+  document.getElementById('editPlanModal').classList.add('hidden');
+  document.getElementById('cancelPlanModal').classList.add('hidden');
   document.getElementById('noteModal').classList.add('hidden');
   document.getElementById('commentModal').classList.add('hidden');
   document.getElementById('ratingModal').classList.add('hidden');
