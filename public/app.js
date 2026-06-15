@@ -2448,10 +2448,16 @@ async function submitSaveTemplate(e) {
 
 async function openEditTemplateModal(templateId) {
   if (!currentUser) return;
-  const res = await api(`${API}/users/${currentUser.id}/templates`);
-  if (!res.success) return;
-  const tmpl = res.templates.find(t => t.id === templateId);
-  if (!tmpl) return;
+  const res = await api(`${API}/templates/${templateId}`);
+  if (!res.success) {
+    showToast(res.error || '模板不存在', 'error');
+    return;
+  }
+  const tmpl = res.template;
+  if (tmpl.creator_id !== currentUser.id) {
+    showToast('只有创建者才能编辑该模板', 'error');
+    return;
+  }
   document.getElementById('editTemplateId').value = tmpl.id;
   document.getElementById('editTemplateName').value = tmpl.name;
   document.getElementById('editTemplateTheme').value = tmpl.theme;
@@ -2507,19 +2513,16 @@ async function deleteTemplate(templateId) {
 
 async function useTemplate(templateId) {
   if (!currentUser) return;
-  const res = await api(`${API}/users/${currentUser.id}/templates`);
-  if (!res.success) return;
-  const tmpl = res.templates.find(t => t.id === templateId);
-  if (!tmpl) {
-    const pubRes = await api(`${API}/templates/public`);
-    if (pubRes.success) {
-      const pubTmpl = pubRes.templates.find(t => t.id === templateId);
-      if (!pubTmpl) return;
-      applyTemplateToForm(pubTmpl);
-    }
+  const res = await api(`${API}/templates/${templateId}`);
+  if (!res.success) {
+    showToast(res.error || '模板不存在', 'error');
     return;
   }
-  applyTemplateToForm(tmpl);
+  if (!res.template.is_public && res.template.creator_id !== currentUser.id) {
+    showToast('该模板为私有模板，无法使用', 'error');
+    return;
+  }
+  applyTemplateToForm(res.template);
 }
 
 function applyTemplateToForm(tmpl) {

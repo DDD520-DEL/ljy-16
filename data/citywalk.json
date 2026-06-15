@@ -7239,7 +7239,19 @@
       "created_at": "2026-06-15 11:00:55"
     }
   ],
-  "route_templates": [],
+  "route_templates": [
+    {
+      "creator_id": 1,
+      "name": "????",
+      "theme": "coffee",
+      "city": "??",
+      "description": "??Citywalk??",
+      "meeting_point": "????",
+      "is_public": 1,
+      "id": 2,
+      "created_at": "2026-06-15 14:52:09"
+    }
+  ],
   "counters": {
     "users": 30,
     "plans": 36,
@@ -7252,6 +7264,6 @@
     "follows": 49,
     "feeds": 129,
     "plan_updates": 6,
-    "route_templates": 1
+    "route_templates": 2
   }
 }

@@ -1484,6 +1484,27 @@ app.post('/api/templates', (req, res) => {
   }
 });
 
+app.get('/api/templates/:id', (req, res) => {
+  try {
+    const tmpl = db.prepare(`
+      SELECT rt.*, u.username as creator_name, u.avatar as creator_avatar
+      FROM route_templates rt
+      LEFT JOIN users u ON rt.creator_id = u.id
+      WHERE rt.id = ?
+    `).get(req.params.id);
+    if (!tmpl) {
+      return res.status(404).json({ error: '模板不存在' });
+    }
+    tmpl.creator = { id: tmpl.creator_id, username: tmpl.creator_name || tmpl.u_username, avatar: tmpl.creator_avatar || tmpl.u_avatar };
+    delete tmpl.creator_name;
+    delete tmpl.creator_avatar;
+    Object.keys(tmpl).filter(k => k.startsWith('u_')).forEach(k => delete tmpl[k]);
+    res.json({ success: true, template: tmpl });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/users/:id/templates', (req, res) => {
   try {
     const templates = db.prepare(`
