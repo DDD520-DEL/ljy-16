@@ -293,6 +293,88 @@
       </div>
     </div>
 
+    <div id="ratingModal" class="modal">
+      <div class="modal-content rating-modal">
+        <div class="modal-header">
+          <h2 id="ratingModalTitle">⭐ 为活动评分</h2>
+          <button class="close-btn" id="closeRatingBtn">×</button>
+        </div>
+        <div class="rating-body">
+          <div class="rating-plan-info">
+            <h3 id="ratingPlanTitle">活动名称</h3>
+            <p id="ratingPlanMeta" class="rating-plan-meta"></p>
+          </div>
+          <div class="rating-section">
+            <div class="rating-item">
+              <div class="rating-item-label">
+                <span class="rating-icon">🗺️</span>
+                <span>路线设计</span>
+              </div>
+              <div class="star-rating" data-rating-type="route_design">
+                <span class="star" data-value="1">☆</span>
+                <span class="star" data-value="2">☆</span>
+                <span class="star" data-value="3">☆</span>
+                <span class="star" data-value="4">☆</span>
+                <span class="star" data-value="5">☆</span>
+              </div>
+            </div>
+            <div class="rating-item">
+              <div class="rating-item-label">
+                <span class="rating-icon">📋</span>
+                <span>组织体验</span>
+              </div>
+              <div class="star-rating" data-rating-type="organization">
+                <span class="star" data-value="1">☆</span>
+                <span class="star" data-value="2">☆</span>
+                <span class="star" data-value="3">☆</span>
+                <span class="star" data-value="4">☆</span>
+                <span class="star" data-value="5">☆</span>
+              </div>
+            </div>
+            <div class="rating-item">
+              <div class="rating-item-label">
+                <span class="rating-icon">🤝</span>
+                <span>搭子契合度</span>
+              </div>
+              <div class="star-rating" data-rating-type="partner_fit">
+                <span class="star" data-value="1">☆</span>
+                <span class="star" data-value="2">☆</span>
+                <span class="star" data-value="3">☆</span>
+                <span class="star" data-value="4">☆</span>
+                <span class="star" data-value="5">☆</span>
+              </div>
+            </div>
+          </div>
+          <div class="rating-summary">
+            <span>综合评分：</span>
+            <span class="rating-summary-score" id="ratingSummaryScore">0.0</span>
+            <span class="rating-summary-stars" id="ratingSummaryStars">☆☆☆☆☆</span>
+          </div>
+          <div class="form-group">
+            <label>评价内容（选填）</label>
+            <textarea id="ratingComment" rows="3" placeholder="分享一下你的Citywalk体验吧..."></textarea>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-outline" id="cancelRatingBtn">取消</button>
+            <button type="button" class="btn btn-primary" id="submitRatingBtn" onclick="submitRating()">提交评分 ✨</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div id="pendingRatingsModal" class="modal">
+      <div class="modal-content" style="max-width: 500px;">
+        <div class="modal-header">
+          <h2>⭐ 待评分活动</h2>
+          <button class="close-btn" onclick="closeModal('pendingRatingsModal')">×</button>
+        </div>
+        <div class="modal-body">
+          <div id="pendingRatingsList" class="pending-ratings-list">
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div id="toast" class="toast hidden"></div>
   </div>
 

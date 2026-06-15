@@ -10,6 +10,8 @@ let currentDiscussionNoteId = null;
 let currentCommentCount = 0;
 let replyingToCommentId = null;
 let replyingToUserName = '';
+let currentRatingPlanId = null;
+let currentRatings = { route_design: 0, organization: 0, partner_fit: 0 };
 
 const avatarPool = ['🧑', '👩', '👨', '👧', '👦', '🧔', '👵', '👴', '🧑‍🎨', '👨‍🍳', '👩‍💻', '🧑‍🚀', '🎨', '📷', '🎭', '🎵'];
 
@@ -282,6 +284,7 @@ async function loadPopularRoutes() {
   if (res.success && res.routes.length > 0) {
     list.innerHTML = res.routes.map((r, idx) => {
       const theme = getThemeInfo(r.theme);
+      const hasRating = r.avg_rating && r.rating_count > 0;
       return `
         <div class="popular-item" data-plan-id="${r.id}">
           <div class="popular-rank rank-${idx < 3 ? idx + 1 : ''}">${idx < 3 ? ['🥇', '🥈', '🥉'][idx] : idx + 1}</div>
@@ -293,6 +296,13 @@ async function loadPopularRoutes() {
               <span>📝 ${r.notes_count || 0}篇笔记</span>
               <span>👤 ${r.creator?.username}</span>
             </div>
+            ${hasRating ? `
+              <div class="plan-rating-badge" style="margin-top:8px;">
+                <span class="plan-rating-score">${r.avg_rating.toFixed(1)}</span>
+                <span class="plan-rating-stars">${renderStars(r.avg_rating)}</span>
+                <span class="plan-rating-count">${r.rating_count} 评</span>
+              </div>
+            ` : ''}
           </div>
           <div class="popular-stats">
             <div class="popular-stat">
@@ -303,6 +313,12 @@ async function loadPopularRoutes() {
               <div class="popular-stat-num">${r.total_likes || 0}</div>
               <div class="popular-stat-label">总点赞</div>
             </div>
+            ${hasRating ? `
+              <div class="popular-stat">
+                <div class="popular-stat-num" style="color:#f59e0b;">${r.avg_rating.toFixed(1)}</div>
+                <div class="popular-stat-label">评分</div>
+              </div>
+            ` : ''}
           </div>
         </div>
       `;
@@ -350,6 +366,12 @@ async function loadMyPlans() {
     favoriteIds = new Set(favRes.favorites.map(f => f.id));
   }
   
+  const pendingRes = await api(`${API}/users/${currentUser.id}/pending-ratings`);
+  const pendingRatings = pendingRes.success ? pendingRes.plans : [];
+  
+  const ratingsStatsRes = await api(`${API}/users/${currentUser.id}/ratings-stats`);
+  const ratingsStats = ratingsStatsRes.success ? ratingsStatsRes.stats : null;
+  
   const res = await api(`${API}/users/${currentUser.id}/plans`);
   const grid = document.getElementById('myPlansGrid');
   
@@ -369,6 +391,72 @@ async function loadMyPlans() {
   }
   document.getElementById('statNotes').textContent = totalNotes;
   
+  let pendingHtml = '';
+  if (pendingRatings.length > 0) {
+    pendingHtml = `
+      <div class="pending-ratings-banner">
+        <div class="pending-ratings-icon">⭐</div>
+        <div class="pending-ratings-info">
+          <strong>你有 ${pendingRatings.length} 场活动待评分</strong>
+          <p>为刚结束的 Citywalk 打分，帮助其他小伙伴找到优质路线~</p>
+        </div>
+        <button class="pending-ratings-btn" onclick="showPendingRatingsList()">去评分</button>
+      </div>
+    `;
+  }
+  
+  let userProfileRatingHtml = '';
+  if (ratingsStats && ratingsStats.rating_count > 0) {
+    const dist = ratingsStats.distribution || {};
+    userProfileRatingHtml = `
+      <div class="user-profile-rating">
+        <h4>⭐ 活动评分</h4>
+        <div class="profile-rating-score">
+          <span class="profile-rating-num">${ratingsStats.avg_overall.toFixed(1)}</span>
+          <span class="profile-rating-stars">${renderStars(ratingsStats.avg_overall)}</span>
+          <span class="profile-rating-count">${ratingsStats.rating_count} 条评价</span>
+        </div>
+        <div class="profile-rating-bars">
+          <div class="profile-rating-bar-item">
+            <span class="profile-rating-bar-label">路线设计</span>
+            <div class="profile-rating-bar-track">
+              <div class="profile-rating-bar-fill" style="width: ${(ratingsStats.avg_route_design / 5) * 100}%"></div>
+            </div>
+            <span class="profile-rating-bar-value">${ratingsStats.avg_route_design.toFixed(1)}</span>
+          </div>
+          <div class="profile-rating-bar-item">
+            <span class="profile-rating-bar-label">组织体验</span>
+            <div class="profile-rating-bar-track">
+              <div class="profile-rating-bar-fill" style="width: ${(ratingsStats.avg_organization / 5) * 100}%"></div>
+            </div>
+            <span class="profile-rating-bar-value">${ratingsStats.avg_organization.toFixed(1)}</span>
+          </div>
+          <div class="profile-rating-bar-item">
+            <span class="profile-rating-bar-label">搭子契合</span>
+            <div class="profile-rating-bar-track">
+              <div class="profile-rating-bar-fill" style="width: ${(ratingsStats.avg_partner_fit / 5) * 100}%"></div>
+            </div>
+            <span class="profile-rating-bar-value">${ratingsStats.avg_partner_fit.toFixed(1)}</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+  
+  const profileCard = document.querySelector('.profile-card');
+  const mineTab = document.getElementById('mineTab');
+  const existingBanner = document.querySelector('.pending-ratings-banner');
+  const existingProfileRating = document.querySelector('.user-profile-rating');
+  if (existingBanner) existingBanner.remove();
+  if (existingProfileRating) existingProfileRating.remove();
+  
+  if (pendingHtml && profileCard) {
+    profileCard.insertAdjacentHTML('beforebegin', pendingHtml);
+  }
+  if (userProfileRatingHtml && profileCard) {
+    profileCard.insertAdjacentHTML('afterend', userProfileRatingHtml);
+  }
+  
   if (res.success && res.plans.length > 0) {
     grid.innerHTML = res.plans.map(p => renderPlanCard(p)).join('');
     bindPlanCardClicks(grid);
@@ -381,6 +469,46 @@ async function loadMyPlans() {
       </div>
     `;
   }
+}
+
+function showPendingRatingsList() {
+  openModal('pendingRatingsModal');
+  loadPendingRatingsModal();
+}
+
+async function loadPendingRatingsModal() {
+  const container = document.getElementById('pendingRatingsList');
+  if (!container) return;
+  
+  const pending = await loadPendingRatings();
+  
+  if (pending.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">✨</div>
+        <h3>暂无待评分活动</h3>
+        <p>你已经为所有已结束的活动评分啦，真棒！</p>
+      </div>
+    `;
+    return;
+  }
+  
+  container.innerHTML = pending.map(p => `
+    <div class="pending-rating-card">
+      <div class="pending-rating-card-info">
+        <h4>${p.title}</h4>
+        <p>${formatDateTime(p.start_time)} · ${p.city}</p>
+      </div>
+      <button class="rate-now-btn" onclick="ratePendingPlan(${p.id}, '${p.title.replace(/'/g, "\\'")}', '${formatDateTime(p.start_time)}')">
+        去评分
+      </button>
+    </div>
+  `).join('');
+}
+
+function ratePendingPlan(planId, title, meta) {
+  closeModal('pendingRatingsModal');
+  openRatingModal(planId, title, meta);
 }
 
 function bindPlanCardClicks(container) {
@@ -438,6 +566,12 @@ async function openPlanDetail(planId) {
   const isFull = plan.current_participants >= plan.max_participants;
   const isFav = favoriteIds.has(plan.id);
   const canAddNote = (plan.status === 'completed' || isJoined) && currentUser;
+  
+  const ratingsRes = await loadPlanRatings(planId);
+  const ratingsStats = ratingsRes?.stats || null;
+  const ratingsList = ratingsRes?.ratings || [];
+  const hasMyRating = currentUser && ratingsList.some(r => r.user_id === currentUser.id);
+  const canRate = plan.status === 'completed' && isJoined && !isCreator && currentUser && !hasMyRating;
 
   const participantsHtml = (plan.participants || []).map(p => `
     <div class="participant-item">
@@ -523,6 +657,13 @@ async function openPlanDetail(planId) {
               </button>
             </div>
             <h2 class="detail-title">${plan.title}</h2>
+            ${ratingsStats && ratingsStats.count > 0 ? `
+              <div class="plan-rating-badge">
+                <span class="plan-rating-score">${ratingsStats.avg_overall.toFixed(1)}</span>
+                <span class="plan-rating-stars">${renderStars(ratingsStats.avg_overall)}</span>
+                <span class="plan-rating-count">${ratingsStats.count} 评</span>
+              </div>
+            ` : ''}
           </div>
         </div>
         <div class="detail-meta-grid">
@@ -569,6 +710,17 @@ async function openPlanDetail(planId) {
                   onclick="openNoteModal(${plan.id})">＋ 添加笔记</button>` : ''}
         </h3>
         <div class="notes-list">${notesHtml}</div>
+      </div>
+      
+      <div class="detail-section">
+        <h3>⭐ 活动评分 (${ratingsStats?.count || 0})
+          ${canRate ? `<button class="btn btn-primary" style="margin-left:auto;font-size:12px;padding:6px 14px;" 
+                  onclick="ratePlanFromDetail(${plan.id}, '${plan.title.replace(/'/g, "\\'")}')">📝 去评分</button>` : ''}
+          ${hasMyRating ? '<span style="margin-left:auto;font-size:12px;color:#10b981;">✓ 你已评分</span>' : ''}
+        </h3>
+        ${renderRatingInfoCard(ratingsStats)}
+        ${ratingsStats && ratingsStats.distribution ? renderRatingDistribution(ratingsStats.distribution, ratingsStats.count) : ''}
+        ${renderRatingList(ratingsList)}
       </div>
 
       <div class="detail-actions">
@@ -1177,6 +1329,263 @@ async function submitNote(e) {
   }
 }
 
+function renderStars(rating, size = 'normal') {
+  const fullStars = Math.floor(rating);
+  const hasHalf = rating % 1 >= 0.5;
+  let stars = '';
+  for (let i = 0; i < 5; i++) {
+    if (i < fullStars) {
+      stars += '★';
+    } else if (i === fullStars && hasHalf) {
+      stars += '☆';
+    } else {
+      stars += '☆';
+    }
+  }
+  return stars;
+}
+
+function initStarRatings() {
+  document.querySelectorAll('.star-rating').forEach(container => {
+    const type = container.dataset.ratingType;
+    const stars = container.querySelectorAll('.star');
+    
+    stars.forEach((star, index) => {
+      star.addEventListener('click', () => {
+        const value = index + 1;
+        currentRatings[type] = value;
+        updateStarDisplay(container, value);
+        updateRatingSummary();
+      });
+      
+      star.addEventListener('mouseenter', () => {
+        updateStarDisplay(container, index + 1, true);
+      });
+      
+      star.addEventListener('mouseleave', () => {
+        updateStarDisplay(container, currentRatings[type]);
+      });
+    });
+  });
+}
+
+function updateStarDisplay(container, value, isHover = false) {
+  const stars = container.querySelectorAll('.star');
+  stars.forEach((star, index) => {
+    if (index < value) {
+      star.classList.add('active');
+      star.textContent = '★';
+    } else {
+      star.classList.remove('active');
+      star.textContent = '☆';
+    }
+  });
+}
+
+function updateRatingSummary() {
+  const { route_design, organization, partner_fit } = currentRatings;
+  const overall = (route_design + organization + partner_fit) / 3;
+  
+  const scoreEl = document.getElementById('ratingSummaryScore');
+  const starsEl = document.getElementById('ratingSummaryStars');
+  
+  if (scoreEl && starsEl) {
+    scoreEl.textContent = overall > 0 ? overall.toFixed(1) : '0.0';
+    starsEl.textContent = renderStars(overall);
+  }
+}
+
+function openRatingModal(planId, planTitle, planMeta) {
+  if (!currentUser) {
+    showToast('请先登录', 'error');
+    return;
+  }
+  
+  currentRatingPlanId = planId;
+  currentRatings = { route_design: 0, organization: 0, partner_fit: 0 };
+  
+  document.getElementById('ratingPlanTitle').textContent = planTitle || '活动';
+  document.getElementById('ratingPlanMeta').textContent = planMeta || '';
+  document.getElementById('ratingComment').value = '';
+  
+  document.querySelectorAll('.star-rating').forEach(container => {
+    updateStarDisplay(container, 0);
+  });
+  updateRatingSummary();
+  
+  document.getElementById('ratingModal').classList.remove('hidden');
+  initStarRatings();
+}
+
+function closeRatingModal() {
+  document.getElementById('ratingModal').classList.add('hidden');
+  currentRatingPlanId = null;
+  currentRatings = { route_design: 0, organization: 0, partner_fit: 0 };
+}
+
+function ratePlanFromDetail(planId, planTitle) {
+  openRatingModal(planId, planTitle, '');
+}
+
+async function submitRating() {
+  const { route_design, organization, partner_fit } = currentRatings;
+  
+  if (route_design === 0 || organization === 0 || partner_fit === 0) {
+    showToast('请为所有维度评分', 'error');
+    return;
+  }
+  
+  const comment = document.getElementById('ratingComment').value;
+  
+  const res = await api(`${API}/plans/${currentRatingPlanId}/rate`, {
+    method: 'POST',
+    body: JSON.stringify({
+      user_id: currentUser.id,
+      route_design,
+      organization,
+      partner_fit,
+      comment
+    })
+  });
+  
+  if (res.success) {
+    showToast('评分成功！感谢你的反馈 ✨', 'success');
+    closeRatingModal();
+    refreshCurrentTab();
+  } else {
+    showToast(res.error || '评分失败', 'error');
+  }
+}
+
+async function loadPendingRatings() {
+  if (!currentUser) return [];
+  const res = await api(`${API}/users/${currentUser.id}/pending-ratings`);
+  return res.success ? res.plans : [];
+}
+
+async function loadPlanRatings(planId) {
+  const res = await api(`${API}/plans/${planId}/ratings`);
+  return res.success ? res : null;
+}
+
+function renderRatingInfoCard(stats) {
+  if (!stats || stats.count === 0) {
+    return `
+      <div class="rating-info-card">
+        <div class="rating-info-main">
+          <div class="rating-info-score">--</div>
+          <div class="rating-info-stars">☆☆☆☆☆</div>
+          <div class="rating-info-count">暂无评分</div>
+        </div>
+        <div class="rating-info-details">
+          <div class="rating-detail-item">
+            <span class="rating-detail-label">路线设计</span>
+            <span class="rating-detail-stars">☆☆☆☆☆</span>
+            <span class="rating-detail-value">--</span>
+          </div>
+          <div class="rating-detail-item">
+            <span class="rating-detail-label">组织体验</span>
+            <span class="rating-detail-stars">☆☆☆☆☆</span>
+            <span class="rating-detail-value">--</span>
+          </div>
+          <div class="rating-detail-item">
+            <span class="rating-detail-label">搭子契合</span>
+            <span class="rating-detail-stars">☆☆☆☆☆</span>
+            <span class="rating-detail-value">--</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+  
+  return `
+    <div class="rating-info-card">
+      <div class="rating-info-main">
+        <div class="rating-info-score">${stats.avg_overall.toFixed(1)}</div>
+        <div class="rating-info-stars">${renderStars(stats.avg_overall)}</div>
+        <div class="rating-info-count">${stats.count} 条评价</div>
+      </div>
+      <div class="rating-info-details">
+        <div class="rating-detail-item">
+          <span class="rating-detail-label">路线设计</span>
+          <span class="rating-detail-stars">${renderStars(stats.avg_route_design)}</span>
+          <span class="rating-detail-value">${stats.avg_route_design.toFixed(1)}</span>
+        </div>
+        <div class="rating-detail-item">
+          <span class="rating-detail-label">组织体验</span>
+          <span class="rating-detail-stars">${renderStars(stats.avg_organization)}</span>
+          <span class="rating-detail-value">${stats.avg_organization.toFixed(1)}</span>
+        </div>
+        <div class="rating-detail-item">
+          <span class="rating-detail-label">搭子契合</span>
+          <span class="rating-detail-stars">${renderStars(stats.avg_partner_fit)}</span>
+          <span class="rating-detail-value">${stats.avg_partner_fit.toFixed(1)}</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderRatingDistribution(distribution, totalCount) {
+  const maxCount = Math.max(...Object.values(distribution), 1);
+  
+  let html = '<div class="rating-distribution"><h4>评分分布</h4>';
+  for (let i = 5; i >= 1; i--) {
+    const count = distribution[i] || 0;
+    const percentage = totalCount > 0 ? (count / totalCount) * 100 : 0;
+    html += `
+      <div class="distribution-bar">
+        <span class="distribution-star">${i}星</span>
+        <div class="distribution-track">
+          <div class="distribution-fill" style="width: ${percentage}%"></div>
+        </div>
+        <span class="distribution-count">${count}</span>
+      </div>
+    `;
+  }
+  html += '</div>';
+  return html;
+}
+
+function renderRatingList(ratings) {
+  if (!ratings || ratings.length === 0) {
+    return '';
+  }
+  
+  return `
+    <div class="ratings-list-section">
+      <h3>💬 大家的评价 (${ratings.length})</h3>
+      ${ratings.map(r => `
+        <div class="rating-card">
+          <div class="rating-card-header">
+            <div class="rating-card-avatar">${r.user?.avatar || '👤'}</div>
+            <div class="rating-card-user-info">
+              <div class="rating-card-username">${r.user?.username || '用户'}</div>
+              <div class="rating-card-time">${formatCommentTime(r.created_at)}</div>
+            </div>
+            <div class="rating-card-stars">${renderStars(r.overall)}</div>
+          </div>
+          <div class="rating-card-scores">
+            <div class="rating-card-score-item">
+              <div class="rating-card-score-label">路线设计</div>
+              <div class="rating-card-score-value">${r.route_design}分</div>
+            </div>
+            <div class="rating-card-score-item">
+              <div class="rating-card-score-label">组织体验</div>
+              <div class="rating-card-score-value">${r.organization}分</div>
+            </div>
+            <div class="rating-card-score-item">
+              <div class="rating-card-score-label">搭子契合</div>
+              <div class="rating-card-score-value">${r.partner_fit}分</div>
+            </div>
+          </div>
+          ${r.comment ? `<div class="rating-card-comment">${r.comment}</div>` : ''}
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
 function refreshCurrentTab() {
   const activeTab = document.querySelector('.nav-btn.active')?.dataset.tab;
   switch (activeTab) {
@@ -1278,6 +1687,23 @@ async function initAppContent() {
   loadDiscoverPlans();
 }
 
+function openModal(modalId) {
+  document.getElementById(modalId).classList.remove('hidden');
+}
+
+function closeModal(modalId) {
+  document.getElementById(modalId).classList.add('hidden');
+}
+
+function initRatingModalEvents() {
+  document.getElementById('closeRatingBtn').addEventListener('click', closeRatingModal);
+  document.getElementById('cancelRatingBtn').addEventListener('click', closeRatingModal);
+  
+  document.getElementById('ratingModal').addEventListener('click', (e) => {
+    if (e.target.id === 'ratingModal') closeRatingModal();
+  });
+}
+
 function initEventListeners() {
   document.querySelectorAll('.nav-btn').forEach(btn => {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
@@ -1372,11 +1798,14 @@ async function init() {
   document.getElementById('createPlanModal').classList.add('hidden');
   document.getElementById('noteModal').classList.add('hidden');
   document.getElementById('commentModal').classList.add('hidden');
+  document.getElementById('ratingModal').classList.add('hidden');
+  document.getElementById('pendingRatingsModal').classList.add('hidden');
   document.getElementById('toast').classList.add('hidden');
   
   initEventListeners();
   initLoginForm();
   initCreatePlanForm();
+  initRatingModalEvents();
   
   const savedUser = loadUser();
   if (savedUser) {

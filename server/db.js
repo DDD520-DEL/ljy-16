@@ -16,6 +16,7 @@ const defaultData = {
   favorites: [],
   comments: [],
   notifications: [],
+  ratings: [],
   counters: {
     users: 0,
     plans: 0,
@@ -23,7 +24,8 @@ const defaultData = {
     notes: 0,
     favorites: 0,
     comments: 0,
-    notifications: 0
+    notifications: 0,
+    ratings: 0
   }
 };
 
@@ -160,16 +162,18 @@ function resolveTableName(fromPart) {
     'favorite_routes': 'favorites',
     'note_comments': 'comments',
     'user_notifications': 'notifications',
+    'plan_ratings': 'ratings',
     'u': 'users',
     'p': 'plans',
     'pp': 'participants',
     'n': 'notes',
     'f': 'favorites',
     'c': 'comments',
-    'nt': 'notifications'
+    'nt': 'notifications',
+    'r': 'ratings'
   };
   
-  const primaryMatch = fromPart.match(/^(citywalk_plans|plan_participants|route_notes|favorite_routes|note_comments|user_notifications|users)\s+(\w+)/i);
+  const primaryMatch = fromPart.match(/^(citywalk_plans|plan_participants|route_notes|favorite_routes|note_comments|user_notifications|plan_ratings|users)\s+(\w+)/i);
   if (primaryMatch) {
     return { mainTable: tables[primaryMatch[1].toLowerCase()], mainAlias: primaryMatch[2].toLowerCase() };
   }
@@ -191,9 +195,9 @@ function handleSelect(query, args) {
   const { mainTable, mainAlias } = fromMatch ? resolveTableName(fromMatch[1].trim()) : { mainTable: 'plans', mainAlias: null };
   let mainData = db[mainTable] || [];
   
-  const joinMatches = [...query.matchAll(/LEFT\s+JOIN\s+(citywalk_plans|plan_participants|route_notes|favorite_routes|note_comments|user_notifications|users)\s+(\w+)\s+ON\s+([\w.]+)\s*=\s*([\w.]+)/gi)];
+  const joinMatches = [...query.matchAll(/LEFT\s+JOIN\s+(citywalk_plans|plan_participants|route_notes|favorite_routes|note_comments|user_notifications|plan_ratings|users)\s+(\w+)\s+ON\s+([\w.]+)\s*=\s*([\w.]+)/gi)];
   const joins = joinMatches.map(m => ({
-    table: ({ citywalk_plans: 'plans', plan_participants: 'participants', route_notes: 'notes', favorite_routes: 'favorites', note_comments: 'comments', user_notifications: 'notifications', users: 'users' })[m[1].toLowerCase()],
+    table: ({ citywalk_plans: 'plans', plan_participants: 'participants', route_notes: 'notes', favorite_routes: 'favorites', note_comments: 'comments', user_notifications: 'notifications', plan_ratings: 'ratings', users: 'users' })[m[1].toLowerCase()],
     alias: m[2].toLowerCase(),
     leftField: m[3].split('.').pop(),
     rightField: m[4].split('.').pop()
@@ -300,11 +304,11 @@ function handleSelect(query, args) {
 }
 
 function handleInsert(query, args) {
-  const tableMatch = query.match(/INSERT\s+INTO\s+(citywalk_plans|plan_participants|route_notes|favorite_routes|note_comments|user_notifications|users)/i);
+  const tableMatch = query.match(/INSERT\s+INTO\s+(citywalk_plans|plan_participants|route_notes|favorite_routes|note_comments|user_notifications|plan_ratings|users)/i);
   if (!tableMatch) return null;
   
   const tableName = tableMatch[1].toLowerCase();
-  const table = ({ citywalk_plans: 'plans', plan_participants: 'participants', route_notes: 'notes', favorite_routes: 'favorites', note_comments: 'comments', user_notifications: 'notifications', users: 'users' })[tableName];
+  const table = ({ citywalk_plans: 'plans', plan_participants: 'participants', route_notes: 'notes', favorite_routes: 'favorites', note_comments: 'comments', user_notifications: 'notifications', plan_ratings: 'ratings', users: 'users' })[tableName];
   
   const fieldsMatch = query.match(/\(([^)]+)\)\s*VALUES/i);
   if (!fieldsMatch) return null;
@@ -354,11 +358,11 @@ function handleInsert(query, args) {
 }
 
 function handleUpdate(query, args) {
-  const tableMatch = query.match(/UPDATE\s+(citywalk_plans|plan_participants|route_notes|favorite_routes|note_comments|user_notifications|users)/i);
+  const tableMatch = query.match(/UPDATE\s+(citywalk_plans|plan_participants|route_notes|favorite_routes|note_comments|user_notifications|plan_ratings|users)/i);
   if (!tableMatch) return null;
   
   const tableName = tableMatch[1].toLowerCase();
-  const table = ({ citywalk_plans: 'plans', plan_participants: 'participants', route_notes: 'notes', favorite_routes: 'favorites', note_comments: 'comments', user_notifications: 'notifications', users: 'users' })[tableName];
+  const table = ({ citywalk_plans: 'plans', plan_participants: 'participants', route_notes: 'notes', favorite_routes: 'favorites', note_comments: 'comments', user_notifications: 'notifications', plan_ratings: 'ratings', users: 'users' })[tableName];
   
   const setMatch = query.match(/SET\s+(.+?)(?:WHERE|$)/i);
   if (!setMatch) return null;
@@ -442,11 +446,11 @@ function handleUpdate(query, args) {
 }
 
 function handleDelete(query, args) {
-  const tableMatch = query.match(/DELETE\s+FROM\s+(citywalk_plans|plan_participants|route_notes|favorite_routes|note_comments|user_notifications|users)/i);
+  const tableMatch = query.match(/DELETE\s+FROM\s+(citywalk_plans|plan_participants|route_notes|favorite_routes|note_comments|user_notifications|plan_ratings|users)/i);
   if (!tableMatch) return 0;
   
   const tableName = tableMatch[1].toLowerCase();
-  const table = ({ citywalk_plans: 'plans', plan_participants: 'participants', route_notes: 'notes', favorite_routes: 'favorites', note_comments: 'comments', user_notifications: 'notifications', users: 'users' })[tableName];
+  const table = ({ citywalk_plans: 'plans', plan_participants: 'participants', route_notes: 'notes', favorite_routes: 'favorites', note_comments: 'comments', user_notifications: 'notifications', plan_ratings: 'ratings', users: 'users' })[tableName];
   
   const whereMatch = query.match(/WHERE\s+(.+)$/i);
   let argIndex = 0;

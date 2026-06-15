@@ -1366,6 +1366,19 @@
       "created_at": "2026-06-14 18:57:30"
     }
   ],
+  "ratings": [
+    {
+      "plan_id": "5",
+      "user_id": 1,
+      "route_design": 5,
+      "organization": 5,
+      "partner_fit": 4,
+      "overall": "4.67",
+      "comment": "非常棒的Citywalk！路线设计很有特色，组织得也很好，搭子们都很有趣~",
+      "id": 1,
+      "created_at": "2026-06-15 00:08:34"
+    }
+  ],
   "counters": {
     "users": 11,
     "plans": 12,
@@ -1373,6 +1386,7 @@
     "notes": 10,
     "favorites": 11,
     "comments": 29,
-    "notifications": 34
+    "notifications": 34,
+    "ratings": 1
   }
 }

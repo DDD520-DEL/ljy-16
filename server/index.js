@@ -317,6 +317,136 @@ app.post('/api/plans/:id/complete', (req, res) => {
   }
 });
 
+app.post('/api/plans/:id/rate', (req, res) => {
+  try {
+    const { user_id, route_design, organization, partner_fit, comment } = req.body;
+    const planId = req.params.id;
+
+    if (!user_id || !route_design || !organization || !partner_fit) {
+      return res.status(400).json({ error: '缺少必填字段' });
+    }
+
+    if (route_design < 1 || route_design > 5 || organization < 1 || organization > 5 || partner_fit < 1 || partner_fit > 5) {
+      return res.status(400).json({ error: '评分必须在1-5星之间' });
+    }
+
+    const plan = db.prepare('SELECT * FROM citywalk_plans WHERE id = ?').get(planId);
+    if (!plan) {
+      return res.status(404).json({ error: '计划不存在' });
+    }
+    if (plan.status !== 'completed') {
+      return res.status(400).json({ error: '只有已完成的活动才能评分' });
+    }
+
+    const participant = db.prepare('SELECT * FROM plan_participants WHERE plan_id = ? AND user_id = ?').get(planId, user_id);
+    if (!participant) {
+      return res.status(400).json({ error: '只有参与活动的用户才能评分' });
+    }
+
+    const existing = db.prepare('SELECT * FROM plan_ratings WHERE plan_id = ? AND user_id = ?').get(planId, user_id);
+    if (existing) {
+      return res.status(400).json({ error: '您已经评过分了' });
+    }
+
+    const overall = (route_design + organization + partner_fit) / 3;
+
+    const stmt = db.prepare(`
+      INSERT INTO plan_ratings (plan_id, user_id, route_design, organization, partner_fit, overall, comment)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    const result = stmt.run(planId, user_id, route_design, organization, partner_fit, overall.toFixed(2), comment || '');
+
+    const rating = db.prepare('SELECT * FROM plan_ratings WHERE id = ?').get(result.lastInsertRowid);
+    res.json({ success: true, rating });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/plans/:id/ratings', (req, res) => {
+  try {
+    const planId = req.params.id;
+
+    const ratings = db.prepare(`
+      SELECT r.*, u.username, u.avatar
+      FROM plan_ratings r
+      LEFT JOIN users u ON r.user_id = u.id
+      WHERE r.plan_id = ?
+      ORDER BY r.created_at DESC
+    `).all(planId).map(r => ({
+      ...r,
+      user: { id: r.user_id, username: r.username || r.u_username, avatar: r.avatar || r.u_avatar }
+    }));
+
+    let avg_route_design = 0, avg_organization = 0, avg_partner_fit = 0, avg_overall = 0;
+    if (ratings.length > 0) {
+      avg_route_design = ratings.reduce((sum, r) => sum + r.route_design, 0) / ratings.length;
+      avg_organization = ratings.reduce((sum, r) => sum + r.organization, 0) / ratings.length;
+      avg_partner_fit = ratings.reduce((sum, r) => sum + r.partner_fit, 0) / ratings.length;
+      avg_overall = ratings.reduce((sum, r) => sum + r.overall, 0) / ratings.length;
+    }
+
+    const distribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    ratings.forEach(r => {
+      const star = Math.round(r.overall);
+      if (star >= 1 && star <= 5) distribution[star]++;
+    });
+
+    res.json({
+      success: true,
+      ratings,
+      stats: {
+        count: ratings.length,
+        avg_route_design: parseFloat(avg_route_design.toFixed(2)),
+        avg_organization: parseFloat(avg_organization.toFixed(2)),
+        avg_partner_fit: parseFloat(avg_partner_fit.toFixed(2)),
+        avg_overall: parseFloat(avg_overall.toFixed(2)),
+        distribution
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/users/:id/pending-ratings', (req, res) => {
+  try {
+    const userId = req.params.id;
+
+    const plans = db.prepare(`
+      SELECT p.*, u.username as creator_name, u.avatar as creator_avatar
+      FROM plan_participants pp
+      LEFT JOIN citywalk_plans p ON pp.plan_id = p.id
+      LEFT JOIN users u ON p.creator_id = u.id
+      WHERE pp.user_id = ? AND p.status = 'completed'
+      ORDER BY p.start_time DESC
+    `).all(userId);
+
+    const pending = [];
+    for (const plan of plans) {
+      const planId = plan.p_id || plan.plan_id || plan.id;
+      for (const key of Object.keys(plan)) {
+        if (key.startsWith('p_')) {
+          plan[key.slice(2)] = plan[key];
+        }
+      }
+      plan.id = planId;
+      
+      const rated = db.prepare('SELECT id FROM plan_ratings WHERE plan_id = ? AND user_id = ?').get(planId, userId);
+      if (!rated) {
+        plan.creator = { id: plan.creator_id, username: plan.creator_name || plan.u_username, avatar: plan.creator_avatar || plan.u_avatar };
+        delete plan.creator_name;
+        delete plan.creator_avatar;
+        pending.push(plan);
+      }
+    }
+
+    res.json({ success: true, plans: pending });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/match/suggestions', (req, res) => {
   try {
     const { user_id, city, theme } = req.query;
@@ -381,17 +511,33 @@ app.get('/api/routes/popular', (req, res) => {
       params.push(theme);
     }
 
-    sql += ' GROUP BY p.id ORDER BY (popularity + total_likes + notes_count * 2) DESC LIMIT ?';
-    params.push(parseInt(limit));
+    sql += ' GROUP BY p.id';
 
     const routes = db.prepare(sql).all(...params);
-    routes.forEach(r => {
+
+    for (const r of routes) {
+      const ratings = db.prepare('SELECT overall FROM plan_ratings WHERE plan_id = ?').all(r.id);
+      const ratingCount = ratings.length;
+      const avgRating = ratingCount > 0 ? ratings.reduce((sum, x) => sum + Number(x.overall || 0), 0) / ratingCount : 0;
+
+      r.rating_count = ratingCount;
+      r.avg_rating = parseFloat(avgRating.toFixed(2));
+
+      const score = r.popularity * 2 + (r.total_likes || 0) + (r.notes_count || 0) * 3 + avgRating * 10 * ratingCount;
+      r.hot_score = parseFloat(score.toFixed(2));
+    }
+
+    routes.sort((a, b) => b.hot_score - a.hot_score);
+
+    const limitedRoutes = routes.slice(0, parseInt(limit));
+
+    limitedRoutes.forEach(r => {
       r.creator = { id: r.creator_id, username: r.creator_name || r.u_username, avatar: r.creator_avatar || r.u_avatar };
       delete r.creator_name;
       delete r.creator_avatar;
     });
 
-    res.json({ success: true, routes });
+    res.json({ success: true, routes: limitedRoutes });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -784,13 +930,20 @@ app.get('/api/users/:id/plans', (req, res) => {
       ORDER BY p.created_at DESC
     `).all(req.params.id);
     plans.forEach(p => {
+      const planId = p.p_id || p.plan_id || p.id;
+      for (const key of Object.keys(p)) {
+        if (key.startsWith('p_')) {
+          p[key.slice(2)] = p[key];
+        }
+      }
+      p.id = planId;
       p.creator = { id: p.creator_id, username: p.creator_name || p.u_username, avatar: p.creator_avatar || p.u_avatar };
       const participants = db.prepare(`
         SELECT u.id, u.username, u.avatar, pp.role 
         FROM plan_participants pp 
         LEFT JOIN users u ON pp.user_id = u.id 
         WHERE pp.plan_id = ?
-      `).all(p.id).map(x => ({
+      `).all(planId).map(x => ({
         id: x.id,
         username: x.username || x.u_username,
         avatar: x.avatar || x.u_avatar,
@@ -801,6 +954,52 @@ app.get('/api/users/:id/plans', (req, res) => {
       delete p.creator_avatar;
     });
     res.json({ success: true, plans });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/users/:id/ratings-stats', (req, res) => {
+  try {
+    const userId = req.params.id;
+
+    const createdPlans = db.prepare('SELECT id FROM citywalk_plans WHERE creator_id = ?').all(userId);
+    const createdPlanIds = createdPlans.map(p => p.id);
+
+    let allRatings = [];
+    for (const planId of createdPlanIds) {
+      const ratings = db.prepare('SELECT * FROM plan_ratings WHERE plan_id = ?').all(planId);
+      allRatings = allRatings.concat(ratings);
+    }
+
+    const ratingCount = allRatings.length;
+    let avgOverall = 0, avgRouteDesign = 0, avgOrganization = 0, avgPartnerFit = 0;
+
+    if (ratingCount > 0) {
+      avgOverall = allRatings.reduce((sum, r) => sum + Number(r.overall || 0), 0) / ratingCount;
+      avgRouteDesign = allRatings.reduce((sum, r) => sum + Number(r.route_design || 0), 0) / ratingCount;
+      avgOrganization = allRatings.reduce((sum, r) => sum + Number(r.organization || 0), 0) / ratingCount;
+      avgPartnerFit = allRatings.reduce((sum, r) => sum + Number(r.partner_fit || 0), 0) / ratingCount;
+    }
+
+    const distribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    allRatings.forEach(r => {
+      const star = Math.round(r.overall);
+      if (star >= 1 && star <= 5) distribution[star]++;
+    });
+
+    res.json({
+      success: true,
+      stats: {
+        created_plans_count: createdPlanIds.length,
+        rating_count: ratingCount,
+        avg_overall: parseFloat(avgOverall.toFixed(2)),
+        avg_route_design: parseFloat(avgRouteDesign.toFixed(2)),
+        avg_organization: parseFloat(avgOrganization.toFixed(2)),
+        avg_partner_fit: parseFloat(avgPartnerFit.toFixed(2)),
+        distribution
+      }
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
