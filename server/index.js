@@ -49,6 +49,10 @@ app.get('/api/users/:id', (req, res) => {
     if (!user) {
       return res.status(404).json({ error: '用户不存在' });
     }
+    const followingCount = db.prepare('SELECT COUNT(*) as count FROM user_follows WHERE follower_id = ?').get(req.params.id);
+    const followersCount = db.prepare('SELECT COUNT(*) as count FROM user_follows WHERE following_id = ?').get(req.params.id);
+    user.following_count = followingCount ? Object.values(followingCount)[0] : 0;
+    user.followers_count = followersCount ? Object.values(followersCount)[0] : 0;
     res.json({ success: true, user });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -103,7 +107,7 @@ app.post('/api/plans', (req, res) => {
 
 app.get('/api/plans', (req, res) => {
   try {
-    const { city, theme, status, keyword, page = 1, limit = 20 } = req.query;
+    const { city, theme, status, keyword, user_id, page = 1, limit = 20 } = req.query;
     let sql = `SELECT p.*, u.username as creator_name, u.avatar as creator_avatar 
                FROM citywalk_plans p 
                LEFT JOIN users u ON p.creator_id = u.id 
@@ -132,6 +136,12 @@ app.get('/api/plans', (req, res) => {
 
     const plans = db.prepare(sql).all(...params);
 
+    let followedIds = new Set();
+    if (user_id) {
+      const follows = db.prepare('SELECT following_id FROM user_follows WHERE follower_id = ?').all(user_id);
+      followedIds = new Set(follows.map(f => f.following_id));
+    }
+
     plans.forEach(plan => {
       plan.creator = {
         id: plan.creator_id,
@@ -150,9 +160,24 @@ app.get('/api/plans', (req, res) => {
         role: p.role
       }));
       plan.participants = participants;
+
+      const isFollowedCreator = followedIds.has(String(plan.creator_id)) || followedIds.has(Number(plan.creator_id));
+      const hasFollowedParticipant = participants.some(p => 
+        (followedIds.has(String(p.id)) || followedIds.has(Number(p.id))) && String(p.id) !== String(user_id)
+      );
+      plan.is_from_followed = isFollowedCreator || hasFollowedParticipant;
+
       delete plan.creator_name;
       delete plan.creator_avatar;
     });
+
+    if (user_id && followedIds.size > 0) {
+      plans.sort((a, b) => {
+        if (a.is_from_followed && !b.is_from_followed) return -1;
+        if (!a.is_from_followed && b.is_from_followed) return 1;
+        return new Date(b.created_at) - new Date(a.created_at);
+      });
+    }
 
     res.json({ success: true, plans });
   } catch (err) {
@@ -759,11 +784,46 @@ app.get('/api/match/suggestions', (req, res) => {
     sql += ' ORDER BY spots_left DESC, p.created_at DESC LIMIT 10';
 
     const suggestions = db.prepare(sql).all(...params);
+
+    let followedIds = new Set();
+    if (user_id) {
+      const follows = db.prepare('SELECT following_id FROM user_follows WHERE follower_id = ?').all(user_id);
+      followedIds = new Set(follows.map(f => f.following_id));
+    }
+
     suggestions.forEach(s => {
       s.creator = { id: s.creator_id, username: s.creator_name || s.u_username, avatar: s.creator_avatar || s.u_avatar };
+      
+      const participants = db.prepare(`
+        SELECT u.id, u.username, u.avatar, pp.role 
+        FROM plan_participants pp 
+        LEFT JOIN users u ON pp.user_id = u.id 
+        WHERE pp.plan_id = ?
+      `).all(s.id).map(p => ({
+        id: p.id,
+        username: p.username || p.u_username,
+        avatar: p.avatar || p.u_avatar,
+        role: p.role
+      }));
+      s.participants = participants;
+
+      const isFollowedCreator = followedIds.has(String(s.creator_id)) || followedIds.has(Number(s.creator_id));
+      const hasFollowedParticipant = participants.some(p => 
+        (followedIds.has(String(p.id)) || followedIds.has(Number(p.id))) && String(p.id) !== String(user_id)
+      );
+      s.is_from_followed = isFollowedCreator || hasFollowedParticipant;
+
       delete s.creator_name;
       delete s.creator_avatar;
     });
+
+    if (user_id && followedIds.size > 0) {
+      suggestions.sort((a, b) => {
+        if (a.is_from_followed && !b.is_from_followed) return -1;
+        if (!a.is_from_followed && b.is_from_followed) return 1;
+        return (b.spots_left || 0) - (a.spots_left || 0);
+      });
+    }
 
     res.json({ success: true, suggestions });
   } catch (err) {

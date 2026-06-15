@@ -166,8 +166,10 @@ function renderPlanCard(plan, options = {}) {
   const isFav = favoriteIds.has(plan.id);
   const spots = plan.max_participants - plan.current_participants;
 
+  const followedBadge = plan.is_from_followed ? '<span class="followed-user-badge">👀 关注的人</span>' : '';
+
   return `
-    <div class="plan-card" data-plan-id="${plan.id}">
+    <div class="plan-card ${plan.is_from_followed ? 'plan-card-followed' : ''}" data-plan-id="${plan.id}">
       <div class="plan-card-header">
         <button class="plan-favorite ${isFav ? 'active' : ''}" 
                 data-plan-id="${plan.id}" 
@@ -178,6 +180,7 @@ function renderPlanCard(plan, options = {}) {
           <span>${theme.icon}</span>
           <span>${theme.name}</span>
         </div>
+        ${followedBadge}
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
           <span class="status-badge ${status.cls}">${status.text}</span>
           ${options.showSpots && plan.status === 'recruiting' && spots > 0 ? 
@@ -207,14 +210,14 @@ function renderPlanCard(plan, options = {}) {
         </div>
         <p class="plan-description">${plan.description || '暂无描述'}</p>
         <div class="plan-card-footer">
-          <div class="plan-creator">
+          <div class="plan-creator" onclick="event.stopPropagation(); openUserProfile(${plan.creator?.id || plan.creator_id})">
             <div class="creator-avatar">${plan.creator?.avatar || '🧑'}</div>
             <span class="creator-name">${plan.creator?.username || '创建者'}</span>
           </div>
           <div class="plan-participants">
             <div class="participants-avatars">
               ${(plan.participants || []).slice(0, 4).map(p => `
-                <div class="participant-avatar" title="${p.username}">${p.avatar || '👤'}</div>
+                <div class="participant-avatar" title="${p.username}" onclick="event.stopPropagation(); openUserProfile(${p.id})">${p.avatar || '👤'}</div>
               `).join('')}
             </div>
             <span class="participants-count ${isFull ? 'full' : ''}">
@@ -232,6 +235,7 @@ async function loadDiscoverPlans() {
   if (currentCityFilter) params.set('city', currentCityFilter);
   if (currentThemeFilter) params.set('theme', currentThemeFilter);
   if (currentKeyword) params.set('keyword', currentKeyword);
+  if (currentUser) params.set('user_id', currentUser.id);
   
   const res = await api(`${API}/plans?${params}`);
   const grid = document.getElementById('discoverPlans');
@@ -2261,6 +2265,26 @@ function initEventListeners() {
     clearTimeout(publicTemplateSearchTimer);
     publicTemplateSearchTimer = setTimeout(loadPublicTemplates, 300);
   });
+
+  document.getElementById('followingStat').addEventListener('click', () => {
+    if (currentUser) openFollowList(currentUser.id, 'following');
+  });
+  document.getElementById('followersStat').addEventListener('click', () => {
+    if (currentUser) openFollowList(currentUser.id, 'followers');
+  });
+}
+
+function initFollowModalEvents() {
+  document.getElementById('closeUserProfileBtn').addEventListener('click', closeUserProfileModal);
+  document.getElementById('userProfileModal').addEventListener('click', (e) => {
+    if (e.target.id === 'userProfileModal') closeUserProfileModal();
+  });
+  document.getElementById('closeFollowListBtn').addEventListener('click', () => {
+    closeModal('followListModal');
+  });
+  document.getElementById('followListModal').addEventListener('click', (e) => {
+    if (e.target.id === 'followListModal') closeModal('followListModal');
+  });
 }
 
 let notificationCheckInterval = null;
@@ -2537,8 +2561,144 @@ function applyTemplateToForm(tmpl) {
   showToast('模板已加载，请补充时间和人数后发布', 'success');
 }
 
+async function openUserProfile(userId) {
+  if (!currentUser) {
+    showToast('请先登录', 'error');
+    return;
+  }
+  
+  const res = await api(`${API}/users/${userId}`);
+  if (!res.success) {
+    showToast('用户不存在', 'error');
+    return;
+  }
+  
+  const user = res.user;
+  const isMe = Number(userId) === Number(currentUser.id);
+  const isFollowing = await checkFollowStatus(userId);
+  
+  const planRes = await api(`${API}/users/${userId}/plans`);
+  const planCount = planRes.success ? planRes.plans.length : 0;
+  
+  let actionBtnHtml = '';
+  if (!isMe) {
+    actionBtnHtml = `
+      <button class="user-profile-follow-btn ${isFollowing ? 'following' : ''}" 
+              id="profileFollowBtn"
+              onclick="toggleProfileFollow(${userId}, this)">
+        ${isFollowing ? '已关注' : '+ 关注'}
+      </button>
+    `;
+  }
+  
+  const content = `
+    <div class="user-profile-body">
+      <div class="user-profile-header">
+        <div class="user-profile-avatar">${user.avatar || '🧑'}</div>
+        <div class="user-profile-info">
+          <h2 class="user-profile-name">${user.username}</h2>
+          <p class="user-profile-bio">${user.bio || '这个人很懒，没有留下签名'}</p>
+          <span class="user-profile-city">📍 ${user.city || '未知城市'}</span>
+        </div>
+        ${actionBtnHtml}
+      </div>
+      <div class="user-profile-stats">
+        <div class="user-profile-stat" onclick="openFollowList(${userId}, 'following')">
+          <div class="user-profile-stat-num">${user.following_count || 0}</div>
+          <div class="user-profile-stat-label">关注</div>
+        </div>
+        <div class="user-profile-stat" onclick="openFollowList(${userId}, 'followers')">
+          <div class="user-profile-stat-num">${user.followers_count || 0}</div>
+          <div class="user-profile-stat-label">粉丝</div>
+        </div>
+        <div class="user-profile-stat">
+          <div class="user-profile-stat-num">${planCount}</div>
+          <div class="user-profile-stat-label">参与计划</div>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  document.getElementById('userProfileContent').innerHTML = content;
+  document.getElementById('userProfileModal').classList.remove('hidden');
+}
+
+function closeUserProfileModal() {
+  document.getElementById('userProfileModal').classList.add('hidden');
+}
+
+async function toggleProfileFollow(userId, btn) {
+  await toggleFollow(userId, btn);
+  const res = await api(`${API}/users/${userId}`);
+  if (res.success) {
+    const followingCountEl = btn.closest('.user-profile-body').querySelector('.user-profile-stat:nth-child(1) .user-profile-stat-num');
+    const followersCountEl = btn.closest('.user-profile-body').querySelector('.user-profile-stat:nth-child(2) .user-profile-stat-num');
+    if (followersCountEl) followersCountEl.textContent = res.user.followers_count || 0;
+  }
+  const activeTab = document.querySelector('.nav-btn.active')?.dataset.tab;
+  if (activeTab === 'mine') loadMyPlans();
+  if (activeTab === 'discover' || activeTab === 'match') refreshCurrentTab();
+}
+
+async function openFollowList(userId, type) {
+  const modal = document.getElementById('followListModal');
+  const title = type === 'following' ? '关注列表' : '粉丝列表';
+  document.getElementById('followListTitle').textContent = title;
+  
+  const endpoint = type === 'following' 
+    ? `${API}/users/${userId}/following` 
+    : `${API}/users/${userId}/followers`;
+  
+  const res = await api(endpoint);
+  const container = document.getElementById('followListContent');
+  
+  if (res.success && res.users.length > 0) {
+    container.innerHTML = res.users.map(u => {
+      const isMe = currentUser && Number(u.id) === Number(currentUser.id);
+      return `
+        <div class="follow-list-item" onclick="closeModal('followListModal'); openUserProfile(${u.id})">
+          <div class="follow-list-avatar">${u.avatar || '🧑'}</div>
+          <div class="follow-list-info">
+            <span class="follow-list-name">${u.username}</span>
+            <span class="follow-list-bio">${u.bio || ''}</span>
+          </div>
+          ${!isMe ? `
+            <button class="follow-list-btn" 
+                    data-user-id="${u.id}"
+                    onclick="event.stopPropagation(); toggleFollowFromList(${u.id}, this)">
+              加载中...
+            </button>
+          ` : ''}
+        </div>
+      `;
+    }).join('');
+    
+    container.querySelectorAll('.follow-list-btn').forEach(async (btn) => {
+      const uid = btn.dataset.userId;
+      const following = await checkFollowStatus(uid);
+      btn.textContent = following ? '已关注' : '+ 关注';
+      if (following) btn.classList.add('following');
+    });
+  } else {
+    container.innerHTML = `
+      <div class="empty-state" style="padding: 30px;">
+        <div class="empty-state-icon" style="font-size: 40px;">👤</div>
+        <h3>${type === 'following' ? '还没有关注任何人' : '还没有粉丝'}</h3>
+        <p>${type === 'following' ? '去发现有趣的搭子吧！' : '多发布计划吸引更多搭子关注你！'}</p>
+      </div>
+    `;
+  }
+  
+  openModal('followListModal');
+}
+
+async function toggleFollowFromList(userId, btn) {
+  await toggleFollow(userId, btn);
+  const activeTab = document.querySelector('.nav-btn.active')?.dataset.tab;
+  if (activeTab === 'mine') loadMyPlans();
+}
+
 async function init() {
-  // 确保所有模态框初始隐藏
   document.getElementById('planDetailModal').classList.add('hidden');
   document.getElementById('createPlanModal').classList.add('hidden');
   document.getElementById('editPlanModal').classList.add('hidden');
@@ -2551,12 +2711,15 @@ async function init() {
   document.getElementById('publicTemplatesModal').classList.add('hidden');
   document.getElementById('saveTemplateModal').classList.add('hidden');
   document.getElementById('editTemplateModal').classList.add('hidden');
+  document.getElementById('userProfileModal').classList.add('hidden');
+  document.getElementById('followListModal').classList.add('hidden');
   document.getElementById('toast').classList.add('hidden');
   
   initEventListeners();
   initLoginForm();
   initCreatePlanForm();
   initRatingModalEvents();
+  initFollowModalEvents();
   
   const savedUser = loadUser();
   if (savedUser) {

@@ -575,6 +575,26 @@
     </div>
 
     <div id="toast" class="toast hidden"></div>
+
+    <div id="userProfileModal" class="modal">
+      <div class="modal-content" style="max-width: 500px;">
+        <div class="modal-header">
+          <h2>👤 用户主页</h2>
+          <button class="close-btn" id="closeUserProfileBtn">×</button>
+        </div>
+        <div id="userProfileContent"></div>
+      </div>
+    </div>
+
+    <div id="followListModal" class="modal">
+      <div class="modal-content" style="max-width: 460px;">
+        <div class="modal-header">
+          <h2 id="followListTitle">关注列表</h2>
+          <button class="close-btn" id="closeFollowListBtn">×</button>
+        </div>
+        <div id="followListContent" class="follow-list-container"></div>
+      </div>
+    </div>
   </div>
 
   <script src="app.js"></script>
