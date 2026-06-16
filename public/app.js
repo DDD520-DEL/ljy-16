@@ -1520,6 +1520,16 @@ function formatCommentTime(str) {
   return `${d.getMonth() + 1}月${d.getDate()}日`;
 }
 
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function renderComment(comment, depth = 0) {
   const isMyComment = comment.author_id === currentUser?.id;
   const hasReplies = comment.replies && comment.replies.length > 0;
@@ -3262,20 +3272,50 @@ function showSearchHistory() {
     searchInput.parentElement.style.position = 'relative';
     searchInput.parentElement.appendChild(dropdown);
   }
-  dropdown.innerHTML = `
-    <div class="search-history-header">
-      <span class="search-history-title">🔍 搜索历史</span>
-      <button class="search-history-clear" onclick="clearSearchHistory()">清除</button>
-    </div>
-    <div class="search-history-list">
-      ${searchHistoryItems.map(item => `
-        <div class="search-history-item" onclick="useSearchHistory('${item.keyword.replace(/'/g, "\\'")}')">
-          <span class="search-history-keyword">${item.keyword}</span>
-          <span class="search-history-time">${formatCommentTime(item.searched_at)}</span>
-        </div>
-      `).join('')}
-    </div>
-  `;
+
+  dropdown.innerHTML = '';
+
+  const header = document.createElement('div');
+  header.className = 'search-history-header';
+
+  const title = document.createElement('span');
+  title.className = 'search-history-title';
+  title.textContent = '🔍 搜索历史';
+
+  const clearBtn = document.createElement('button');
+  clearBtn.className = 'search-history-clear';
+  clearBtn.textContent = '清除';
+  clearBtn.addEventListener('click', clearSearchHistory);
+
+  header.appendChild(title);
+  header.appendChild(clearBtn);
+  dropdown.appendChild(header);
+
+  const list = document.createElement('div');
+  list.className = 'search-history-list';
+
+  for (const item of searchHistoryItems) {
+    const itemEl = document.createElement('div');
+    itemEl.className = 'search-history-item';
+    itemEl.dataset.keyword = item.keyword;
+    itemEl.addEventListener('click', () => {
+      useSearchHistory(itemEl.dataset.keyword);
+    });
+
+    const keywordEl = document.createElement('span');
+    keywordEl.className = 'search-history-keyword';
+    keywordEl.textContent = item.keyword;
+
+    const timeEl = document.createElement('span');
+    timeEl.className = 'search-history-time';
+    timeEl.textContent = formatCommentTime(item.searched_at);
+
+    itemEl.appendChild(keywordEl);
+    itemEl.appendChild(timeEl);
+    list.appendChild(itemEl);
+  }
+
+  dropdown.appendChild(list);
   dropdown.classList.remove('hidden');
 }
 
