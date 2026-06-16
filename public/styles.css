@@ -3867,3 +3867,159 @@ body {
   background: rgba(225, 112, 85, 0.1);
   opacity: 1;
 }
+
+.recommendations-section {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: var(--radius-md);
+  padding: 24px;
+  margin-bottom: 28px;
+  box-shadow: var(--shadow-md);
+}
+
+.recommendations-header {
+  margin-bottom: 20px;
+}
+
+.recommendations-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.recommendations-title h2 {
+  font-size: 22px;
+  font-weight: 800;
+  color: white;
+}
+
+.recommendations-icon {
+  font-size: 28px;
+}
+
+.recommendations-subtitle {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 14px;
+  margin-top: 6px;
+  margin-left: 38px;
+}
+
+.recommendations-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.recommendations-grid .plan-card {
+  border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.recommendations-grid .plan-card:hover {
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.search-history-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+  z-index: 200;
+  border: 2px solid var(--primary);
+  border-top: none;
+  animation: slideDown 0.15s ease;
+}
+
+.search-history-dropdown.hidden {
+  display: none;
+}
+
+.search-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.search-history-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.search-history-clear {
+  background: none;
+  border: none;
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: 4px;
+  transition: background 0.2s;
+  font-family: inherit;
+}
+
+.search-history-clear:hover {
+  background: rgba(255, 107, 107, 0.1);
+}
+
+.search-history-list {
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.search-history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.search-history-item:hover {
+  background: var(--bg);
+}
+
+.search-history-keyword {
+  font-size: 14px;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.search-history-time {
+  font-size: 11px;
+  color: var(--text-light);
+  flex-shrink: 0;
+}
+
+.personalized-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+@media (max-width: 768px) {
+  .recommendations-section {
+    padding: 16px;
+  }
+
+  .recommendations-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .recommendations-title h2 {
+    font-size: 18px;
+  }
+}

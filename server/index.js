@@ -833,7 +833,7 @@ app.get('/api/match/suggestions', (req, res) => {
 
 app.get('/api/routes/popular', (req, res) => {
   try {
-    const { city, theme, limit = 10 } = req.query;
+    const { city, theme, limit = 10, user_id } = req.query;
     let sql = `
       SELECT p.*, u.username as creator_name, u.avatar as creator_avatar,
              p.current_participants as popularity,
@@ -859,6 +859,21 @@ app.get('/api/routes/popular', (req, res) => {
 
     const routes = db.prepare(sql).all(...params);
 
+    let userCity = '';
+    let userThemeCount = {};
+    if (user_id) {
+      const user = db.prepare('SELECT * FROM users WHERE id = ?').get(user_id);
+      if (user) {
+        userCity = user.city || '';
+        const browsedPlans = db.prepare('SELECT bp.*, p.theme, p.city FROM browsed_plans bp LEFT JOIN citywalk_plans p ON bp.plan_id = p.id WHERE bp.user_id = ?').all(user_id);
+        browsedPlans.forEach(bp => {
+          if (bp.theme) {
+            userThemeCount[bp.theme] = (userThemeCount[bp.theme] || 0) + (bp.browse_count || 1);
+          }
+        });
+      }
+    }
+
     for (const r of routes) {
       const ratings = db.prepare('SELECT overall FROM plan_ratings WHERE plan_id = ?').all(r.id);
       const ratingCount = ratings.length;
@@ -878,8 +893,20 @@ app.get('/api/routes/popular', (req, res) => {
       }
       r.photo_likes = photoLikes;
 
-      const score = r.popularity * 2 + (r.total_likes || 0) + (r.notes_count || 0) * 3 
+      let score = r.popularity * 2 + (r.total_likes || 0) + (r.notes_count || 0) * 3 
         + avgRating * 10 * ratingCount + photoCount * 5 + photoLikes * 2;
+
+      if (user_id) {
+        if (userCity && r.city === userCity) {
+          score += 30;
+          r.personalized_city_bonus = true;
+        }
+        if (userThemeCount[r.theme]) {
+          score += Math.min(userThemeCount[r.theme] * 5, 40);
+          r.personalized_theme_bonus = true;
+        }
+      }
+
       r.hot_score = parseFloat(score.toFixed(2));
     }
 
@@ -1676,6 +1703,186 @@ app.delete('/api/templates/:id', (req, res) => {
     }
     db.prepare('DELETE FROM route_templates WHERE id = ?').run(templateId);
     res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/users/:id/search-history', (req, res) => {
+  try {
+    const userId = req.params.id;
+    const { keyword } = req.body;
+    if (!keyword || !keyword.trim()) {
+      return res.status(400).json({ error: '搜索关键词不能为空' });
+    }
+    const trimmed = keyword.trim();
+    const existing = db.prepare('SELECT * FROM search_history WHERE user_id = ? AND keyword = ?').get(userId, trimmed);
+    if (existing) {
+      db.prepare('UPDATE search_history SET searched_at = CURRENT_TIMESTAMP WHERE id = ?').run(existing.id);
+    } else {
+      const countResult = db.prepare('SELECT COUNT(*) as count FROM search_history WHERE user_id = ?').get(userId);
+      const count = countResult ? Object.values(countResult)[0] : 0;
+      if (count >= 20) {
+        const oldest = db.prepare('SELECT * FROM search_history WHERE user_id = ? ORDER BY searched_at ASC LIMIT 1').get(userId);
+        if (oldest) {
+          db.prepare('DELETE FROM search_history WHERE id = ?').run(oldest.id);
+        }
+      }
+      db.prepare('INSERT INTO search_history (user_id, keyword) VALUES (?, ?)').run(userId, trimmed);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/users/:id/search-history', (req, res) => {
+  try {
+    const { limit = 10 } = req.query;
+    const records = db.prepare('SELECT * FROM search_history WHERE user_id = ? ORDER BY searched_at DESC LIMIT ?').all(req.params.id, parseInt(limit));
+    res.json({ success: true, history: records });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/users/:id/search-history', (req, res) => {
+  try {
+    db.prepare('DELETE FROM search_history WHERE user_id = ?').run(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/users/:id/browsed-plans', (req, res) => {
+  try {
+    const userId = req.params.id;
+    const { plan_id } = req.body;
+    if (!plan_id) {
+      return res.status(400).json({ error: '缺少计划ID' });
+    }
+    const existing = db.prepare('SELECT * FROM browsed_plans WHERE user_id = ? AND plan_id = ?').get(userId, plan_id);
+    if (existing) {
+      db.prepare('UPDATE browsed_plans SET browsed_at = CURRENT_TIMESTAMP, browse_count = browse_count + 1 WHERE id = ?').run(existing.id);
+    } else {
+      const countResult = db.prepare('SELECT COUNT(*) as count FROM browsed_plans WHERE user_id = ?').get(userId);
+      const count = countResult ? Object.values(countResult)[0] : 0;
+      if (count >= 50) {
+        const oldest = db.prepare('SELECT * FROM browsed_plans WHERE user_id = ? ORDER BY browsed_at ASC LIMIT 1').get(userId);
+        if (oldest) {
+          db.prepare('DELETE FROM browsed_plans WHERE id = ?').run(oldest.id);
+        }
+      }
+      db.prepare('INSERT INTO browsed_plans (user_id, plan_id) VALUES (?, ?)').run(userId, plan_id);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/users/:id/recommendations', (req, res) => {
+  try {
+    const userId = req.params.id;
+
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+    if (!user) {
+      return res.status(404).json({ error: '用户不存在' });
+    }
+
+    const browsedPlans = db.prepare('SELECT bp.*, p.theme, p.city FROM browsed_plans bp LEFT JOIN citywalk_plans p ON bp.plan_id = p.id WHERE bp.user_id = ? ORDER BY bp.browsed_at DESC LIMIT 50').all(userId);
+
+    const themeCount = {};
+    const cityCount = {};
+    browsedPlans.forEach(bp => {
+      if (bp.theme) {
+        themeCount[bp.theme] = (themeCount[bp.theme] || 0) + (bp.browse_count || 1);
+      }
+      if (bp.city) {
+        cityCount[bp.city] = (cityCount[bp.city] || 0) + (bp.browse_count || 1);
+      }
+    });
+
+    const searchHistory = db.prepare('SELECT keyword FROM search_history WHERE user_id = ? ORDER BY searched_at DESC LIMIT 10').all(userId);
+
+    const browsedPlanIds = browsedPlans.map(bp => bp.plan_id);
+    const joinedPlanIds = db.prepare('SELECT plan_id FROM plan_participants WHERE user_id = ?').all(userId).map(p => p.plan_id);
+    const excludeIds = [...new Set([...browsedPlanIds, ...joinedPlanIds])];
+
+    let recruitingPlans = db.prepare(`
+      SELECT p.*, u.username as creator_name, u.avatar as creator_avatar
+      FROM citywalk_plans p
+      LEFT JOIN users u ON p.creator_id = u.id
+      WHERE p.status = 'recruiting' AND p.creator_id != ?
+    `).all(userId);
+
+    if (excludeIds.length > 0) {
+      recruitingPlans = recruitingPlans.filter(p => !excludeIds.includes(p.id));
+    }
+
+    recruitingPlans.forEach(plan => {
+      let score = 0;
+
+      if (user.city && plan.city === user.city) {
+        score += 30;
+      }
+
+      if (themeCount[plan.theme]) {
+        score += Math.min(themeCount[plan.theme] * 10, 50);
+      }
+
+      if (cityCount[plan.city]) {
+        score += Math.min(cityCount[plan.city] * 5, 30);
+      }
+
+      if (searchHistory.length > 0) {
+        const keywords = searchHistory.map(s => s.keyword.toLowerCase());
+        const titleLower = (plan.title || '').toLowerCase();
+        const descLower = (plan.description || '').toLowerCase();
+        for (const kw of keywords) {
+          if (titleLower.includes(kw) || descLower.includes(kw)) {
+            score += 15;
+            break;
+          }
+        }
+      }
+
+      const spotsLeft = plan.max_participants - plan.current_participants;
+      score += Math.max(spotsLeft * 2, 0);
+
+      const createdAt = new Date(plan.created_at);
+      const now = new Date();
+      const hoursDiff = (now - createdAt) / (1000 * 60 * 60);
+      if (hoursDiff < 24) score += 20;
+      else if (hoursDiff < 72) score += 10;
+
+      plan.recommendation_score = score;
+    });
+
+    recruitingPlans.sort((a, b) => b.recommendation_score - a.recommendation_score);
+
+    const recommendations = recruitingPlans.slice(0, 5);
+
+    recommendations.forEach(r => {
+      r.creator = { id: r.creator_id, username: r.creator_name || r.u_username, avatar: r.creator_avatar || r.u_avatar };
+      const participants = db.prepare(`
+        SELECT u.id, u.username, u.avatar, pp.role
+        FROM plan_participants pp
+        LEFT JOIN users u ON pp.user_id = u.id
+        WHERE pp.plan_id = ?
+      `).all(r.id).map(p => ({
+        id: p.id,
+        username: p.username || p.u_username,
+        avatar: p.avatar || p.u_avatar,
+        role: p.role
+      }));
+      r.participants = participants;
+      delete r.creator_name;
+      delete r.creator_avatar;
+    });
+
+    res.json({ success: true, recommendations });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -20,6 +20,8 @@ let currentDateTab = 'recruiting';
 let selectedDatePlans = [];
 let currentDetailTab = 'notes';
 let currentDetailPlanId = null;
+let searchHistoryVisible = false;
+let searchHistoryItems = [];
 let currentPlanPhotos = [];
 
 const avatarPool = ['🧑', '👩', '👨', '👧', '👦', '🧔', '👵', '👴', '🧑‍🎨', '👨‍🍳', '👩‍💻', '🧑‍🚀', '🎨', '📷', '🎭', '🎵'];
@@ -551,6 +553,7 @@ async function loadPopularRoutes() {
   const params = new URLSearchParams();
   if (city) params.set('city', city);
   
+  if (currentUser) params.set('user_id', currentUser.id);
   const res = await api(`${API}/routes/popular?${params}`);
   const list = document.getElementById('popularList');
   
@@ -558,11 +561,12 @@ async function loadPopularRoutes() {
     list.innerHTML = res.routes.map((r, idx) => {
       const theme = getThemeInfo(r.theme);
       const hasRating = r.avg_rating && r.rating_count > 0;
+      const personalBadge = (r.personalized_city_bonus || r.personalized_theme_bonus) ? '<span class="personalized-badge">🎯 为你推荐</span>' : '';
       return `
         <div class="popular-item" data-plan-id="${r.id}">
           <div class="popular-rank rank-${idx < 3 ? idx + 1 : ''}">${idx < 3 ? ['🥇', '🥈', '🥉'][idx] : idx + 1}</div>
           <div class="popular-info">
-            <h3>${r.title}</h3>
+            <h3>${r.title}</h3>${personalBadge}
             <div class="popular-meta">
               <span style="color: ${theme.color}">${theme.icon} ${theme.name}</span>
               <span>📍 ${r.city}</span>
@@ -1130,6 +1134,12 @@ async function openPlanDetail(planId) {
   });
 
   currentDetailPlanId = planId;
+  if (currentUser) {
+    api(`${API}/users/${currentUser.id}/browsed-plans`, {
+      method: 'POST',
+      body: JSON.stringify({ plan_id: planId })
+    });
+  }
   if (currentDetailTab === 'photos') {
     loadPlanPhotos(planId);
   }
@@ -2559,6 +2569,8 @@ async function initAppContent() {
   }
   
   refreshDiscoverView();
+  loadRecommendations();
+  if (currentUser) loadSearchHistory();
 }
 
 function openModal(modalId) {
@@ -2668,8 +2680,22 @@ function initEventListeners() {
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => {
       currentKeyword = e.target.value;
+      if (currentUser && currentKeyword.trim()) {
+        api(`${API}/users/${currentUser.id}/search-history`, {
+          method: 'POST',
+          body: JSON.stringify({ keyword: currentKeyword })
+        });
+      }
       refreshDiscoverView();
     }, 300);
+  });
+  document.getElementById('searchKeyword').addEventListener('focus', () => {
+    if (currentUser && searchHistoryItems.length > 0 && !currentKeyword) {
+      showSearchHistory();
+    }
+  });
+  document.getElementById('searchKeyword').addEventListener('blur', () => {
+    setTimeout(() => hideSearchHistory(), 200);
   });
 
   document.getElementById('refreshMatchBtn').addEventListener('click', loadMatchSuggestions);
@@ -3213,6 +3239,82 @@ function stopNotificationCheck() {
   if (notificationCheckInterval) {
     clearInterval(notificationCheckInterval);
     notificationCheckInterval = null;
+  }
+}
+
+async function loadSearchHistory() {
+  if (!currentUser) return;
+  const res = await api(`${API}/users/${currentUser.id}/search-history`);
+  if (res.success) {
+    searchHistoryItems = res.history;
+  }
+}
+
+function showSearchHistory() {
+  if (!currentUser || searchHistoryItems.length === 0) return;
+  searchHistoryVisible = true;
+  let dropdown = document.getElementById('searchHistoryDropdown');
+  if (!dropdown) {
+    dropdown = document.createElement('div');
+    dropdown.id = 'searchHistoryDropdown';
+    dropdown.className = 'search-history-dropdown';
+    const searchInput = document.getElementById('searchKeyword');
+    searchInput.parentElement.style.position = 'relative';
+    searchInput.parentElement.appendChild(dropdown);
+  }
+  dropdown.innerHTML = `
+    <div class="search-history-header">
+      <span class="search-history-title">🔍 搜索历史</span>
+      <button class="search-history-clear" onclick="clearSearchHistory()">清除</button>
+    </div>
+    <div class="search-history-list">
+      ${searchHistoryItems.map(item => `
+        <div class="search-history-item" onclick="useSearchHistory('${item.keyword.replace(/'/g, "\\'")}')">
+          <span class="search-history-keyword">${item.keyword}</span>
+          <span class="search-history-time">${formatCommentTime(item.searched_at)}</span>
+        </div>
+      `).join('')}
+    </div>
+  `;
+  dropdown.classList.remove('hidden');
+}
+
+function hideSearchHistory() {
+  searchHistoryVisible = false;
+  const dropdown = document.getElementById('searchHistoryDropdown');
+  if (dropdown) {
+    dropdown.classList.add('hidden');
+  }
+}
+
+async function clearSearchHistory() {
+  if (!currentUser) return;
+  await api(`${API}/users/${currentUser.id}/search-history`, { method: 'DELETE' });
+  searchHistoryItems = [];
+  hideSearchHistory();
+  showToast('搜索历史已清除', 'info');
+}
+
+function useSearchHistory(keyword) {
+  document.getElementById('searchKeyword').value = keyword;
+  currentKeyword = keyword;
+  hideSearchHistory();
+  refreshDiscoverView();
+}
+
+async function loadRecommendations() {
+  if (!currentUser) return;
+  const res = await api(`${API}/users/${currentUser.id}/recommendations`);
+  const container = document.getElementById('recommendationsSection');
+  if (!container) return;
+  
+  if (res.success && res.recommendations.length > 0) {
+    container.classList.remove('hidden');
+    const grid = document.getElementById('recommendationsGrid');
+    grid.innerHTML = res.recommendations.map(p => renderPlanCard(p)).join('');
+    bindPlanCardClicks(grid);
+  } else {
+    container.classList.add('hidden');
   }
 }
 
