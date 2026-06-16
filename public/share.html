@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Citywalk 路线攻略分享</title>
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #FF6B6B 0%, #FFE66D 50%, #4ECDC4 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .share-container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .share-hero {
+      background: white;
+      border-radius: 24px;
+      padding: 40px;
+      text-align: center;
+      margin-bottom: 24px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+    }
+
+    .share-hero-icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+    }
+
+    .share-hero h1 {
+      font-size: 32px;
+      color: #2D3436;
+      margin-bottom: 12px;
+      font-weight: 700;
+    }
+
+    .share-hero p {
+      font-size: 16px;
+      color: #636E72;
+      line-height: 1.6;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .share-meta {
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid #DFE6E9;
+    }
+
+    .share-meta-item {
+      text-align: center;
+    }
+
+    .share-meta-item .num {
+      font-size: 24px;
+      font-weight: 700;
+      color: #FF6B6B;
+    }
+
+    .share-meta-item .label {
+      font-size: 13px;
+      color: #B2BEC3;
+      margin-top: 4px;
+    }
+
+    .share-section {
+      background: white;
+      border-radius: 20px;
+      padding: 32px;
+      margin-bottom: 24px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+    }
+
+    .share-section-title {
+      font-size: 22px;
+      font-weight: 700;
+      color: #2D3436;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .share-section-title .icon {
+      font-size: 28px;
+    }
+
+    .route-timeline {
+      position: relative;
+      padding-left: 40px;
+    }
+
+    .route-timeline::before {
+      content: '';
+      position: absolute;
+      left: 14px;
+      top: 10px;
+      bottom: 10px;
+      width: 3px;
+      background: linear-gradient(to bottom, #FF6B6B, #4ECDC4);
+      border-radius: 2px;
+    }
+
+    .route-point {
+      position: relative;
+      margin-bottom: 24px;
+      padding-bottom: 24px;
+      border-bottom: 1px dashed #DFE6E9;
+    }
+
+    .route-point:last-child {
+      margin-bottom: 0;
+      padding-bottom: 0;
+      border-bottom: none;
+    }
+
+    .route-point-num {
+      position: absolute;
+      left: -40px;
+      top: 0;
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #FF6B6B, #EE5A5A);
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 14px;
+      box-shadow: 0 4px 12px rgba(255, 107, 107, 0.4);
+    }
+
+    .route-point-name {
+      font-size: 18px;
+      font-weight: 600;
+      color: #2D3436;
+      margin-bottom: 8px;
+    }
+
+    .route-point-review {
+      font-size: 14px;
+      color: #636E72;
+      line-height: 1.6;
+      margin-bottom: 8px;
+    }
+
+    .route-point-tips {
+      background: linear-gradient(135deg, #FFF9E6 0%, #FFF3CD 100%);
+      padding: 12px 16px;
+      border-radius: 12px;
+      font-size: 13px;
+      color: #856404;
+      border-left: 4px solid #FFE66D;
+    }
+
+    .photo-gallery {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+
+    .photo-item {
+      aspect-ratio: 1;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #FAFAFA;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .photo-item img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .photo-item .placeholder {
+      font-size: 48px;
+      opacity: 0.3;
+    }
+
+    .participants-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .participant-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 20px;
+      background: #FAFAFA;
+      border-radius: 50px;
+      transition: all 0.2s;
+    }
+
+    .participant-card:hover {
+      background: #F0F0F0;
+      transform: translateY(-2px);
+    }
+
+    .participant-avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #4ECDC4, #44A08D);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+    }
+
+    .participant-info {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .participant-name {
+      font-weight: 600;
+      font-size: 14px;
+      color: #2D3436;
+    }
+
+    .participant-role {
+      font-size: 12px;
+      color: #B2BEC3;
+    }
+
+    .share-footer {
+      text-align: center;
+      padding: 24px;
+      color: white;
+      font-size: 14px;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+
+    .share-footer .logo {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .loading-state {
+      text-align: center;
+      padding: 80px 20px;
+      color: white;
+    }
+
+    .loading-state .icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+      animation: bounce 1s infinite;
+    }
+
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+
+    .error-state {
+      text-align: center;
+      padding: 80px 20px;
+      color: white;
+    }
+
+    .error-state .icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+    }
+
+    .error-state h2 {
+      margin-bottom: 8px;
+    }
+
+    .empty-photos {
+      text-align: center;
+      padding: 40px;
+      color: #B2BEC3;
+    }
+
+    .empty-photos .icon {
+      font-size: 48px;
+      margin-bottom: 12px;
+      opacity: 0.5;
+    }
+
+    @media (max-width: 640px) {
+      body {
+        padding: 12px;
+      }
+
+      .share-hero {
+        padding: 24px;
+        border-radius: 16px;
+      }
+
+      .share-hero h1 {
+        font-size: 24px;
+      }
+
+      .share-section {
+        padding: 20px;
+        border-radius: 16px;
+      }
+
+      .share-section-title {
+        font-size: 18px;
+      }
+
+      .photo-gallery {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .route-timeline {
+        padding-left: 32px;
+      }
+
+      .route-point-num {
+        left: -32px;
+        width: 26px;
+        height: 26px;
+        font-size: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="share-container" id="shareContainer">
+    <div class="loading-state" id="loadingState">
+      <div class="icon">🗺️</div>
+      <h2>加载中...</h2>
+    </div>
+  </div>
+
+  <div class="share-footer">
+    <div class="logo">🚶‍♀️ Citywalk 搭子</div>
+    <p>一起发现城市的美好</p>
+  </div>
+
+  <script>
+    const API = '/api';
+
+    async function api(url, options = {}) {
+      const defaultOptions = {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      };
+      
+      const res = await fetch(url, { ...defaultOptions, ...options });
+      const data = await res.json();
+      return data;
+    }
+
+    async function loadSharePage() {
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get('token');
+      
+      if (!token) {
+        showError('缺少分享令牌');
+        return;
+      }
+      
+      try {
+        const res = await api(`${API}/share/${token}`);
+        if (res.success) {
+          renderSharePage(res);
+        } else {
+          showError(res.error || '分享页面不存在');
+        }
+      } catch (e) {
+        showError('加载失败，请稍后重试');
+      }
+    }
+
+    function renderSharePage(data) {
+      const container = document.getElementById('shareContainer');
+      const { share_page: sharePage, plan, participants, guide, photos } = data;
+      
+      const checkinPoints = guide?.checkin_points || [];
+      const selectedPhotos = sharePage.selected_photos || [];
+      const displayPhotos = selectedPhotos.length > 0 
+        ? photos.filter(p => selectedPhotos.includes(p.id))
+        : photos.slice(0, 9);
+      
+      document.title = sharePage.title || 'Citywalk 路线攻略';
+      
+      container.innerHTML = `
+        <div class="share-hero">
+          <div class="share-hero-icon">🗺️</div>
+          <h1>${escapeHtml(sharePage.title || plan?.title || 'Citywalk 路线攻略')}</h1>
+          ${sharePage.summary ? `<p>${escapeHtml(sharePage.summary)}</p>` : ''}
+          <div class="share-meta">
+            <div class="share-meta-item">
+              <div class="num">${checkinPoints.length}</div>
+              <div class="label">打卡点</div>
+            </div>
+            <div class="share-meta-item">
+              <div class="num">${participants?.length || 0}</div>
+              <div class="label">参与者</div>
+            </div>
+            <div class="share-meta-item">
+              <div class="num">${displayPhotos.length}</div>
+              <div class="label">照片</div>
+            </div>
+          </div>
+        </div>
+        
+        ${checkinPoints.length > 0 ? `
+          <div class="share-section">
+            <div class="share-section-title">
+              <span class="icon">📍</span>
+              行走路线
+            </div>
+            <div class="route-timeline">
+              ${checkinPoints.map((p, i) => `
+                <div class="route-point">
+                  <div class="route-point-num">${i + 1}</div>
+                  <div class="route-point-name">${escapeHtml(p.name)}</div>
+                  ${p.collective_review ? `<div class="route-point-review">${escapeHtml(p.collective_review)}</div>` : ''}
+                  ${p.travel_tips ? `<div class="route-point-tips">💡 ${escapeHtml(p.travel_tips)}</div>` : ''}
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+        
+        ${displayPhotos.length > 0 ? `
+          <div class="share-section">
+            <div class="share-section-title">
+              <span class="icon">📸</span>
+              精彩瞬间
+            </div>
+            <div class="photo-gallery">
+              ${displayPhotos.map(photo => `
+                <div class="photo-item">
+                  ${photo.image_url 
+                    ? `<img src="${photo.image_url}" alt="照片">`
+                    : '<div class="placeholder">📷</div>'
+                  }
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+        
+        ${participants && participants.length > 0 ? `
+          <div class="share-section">
+            <div class="share-section-title">
+              <span class="icon">👥</span>
+              一起走的搭子
+            </div>
+            <div class="participants-grid">
+              ${participants.map(p => `
+                <div class="participant-card">
+                  <div class="participant-avatar">${p.avatar || '🧑'}</div>
+                  <div class="participant-info">
+                    <span class="participant-name">${escapeHtml(p.username || '匿名用户')}</span>
+                    <span class="participant-role">${p.role === 'creator' ? '发起人' : '参与者'}</span>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+      `;
+    }
+
+    function showError(message) {
+      const container = document.getElementById('shareContainer');
+      container.innerHTML = `
+        <div class="error-state">
+          <div class="icon">😢</div>
+          <h2>出错了</h2>
+          <p>${escapeHtml(message)}</p>
+        </div>
+      `;
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    document.addEventListener('DOMContentLoaded', loadSharePage);
+  </script>
+</body>
+</html>

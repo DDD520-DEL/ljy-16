@@ -2115,6 +2115,624 @@ app.get('/api/users/:id/photos-stats', (req, res) => {
   }
 });
 
+function generateToken() {
+  return Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+}
+
+function isPlanParticipant(planId, userId) {
+  const participant = db.prepare('SELECT * FROM plan_participants WHERE plan_id = ? AND user_id = ?').get(planId, userId);
+  return !!participant;
+}
+
+app.get('/api/plans/:id/guide', (req, res) => {
+  try {
+    const planId = req.params.id;
+    const { user_id } = req.query;
+
+    const plan = db.prepare('SELECT * FROM citywalk_plans WHERE id = ?').get(planId);
+    if (!plan) {
+      return res.status(404).json({ error: '计划不存在' });
+    }
+
+    let guide = db.prepare('SELECT * FROM route_guides WHERE plan_id = ?').get(planId);
+    
+    if (!guide) {
+      const stmt = db.prepare(`
+        INSERT INTO route_guides (plan_id, title, description, created_by, updated_by)
+        VALUES (?, ?, ?, ?, ?)
+      `);
+      const result = stmt.run(
+        planId,
+        plan.title + ' - 路线攻略',
+        plan.description || '',
+        plan.creator_id,
+        plan.creator_id
+      );
+      guide = db.prepare('SELECT * FROM route_guides WHERE id = ?').get(result.lastInsertRowid);
+    }
+
+    const checkinPoints = db.prepare(`
+      SELECT * FROM checkin_points 
+      WHERE guide_id = ? 
+      ORDER BY order_index ASC, id ASC
+    `).all(guide.id).map(p => {
+      let photos = [];
+      try { photos = p.photos ? JSON.parse(p.photos) : []; } catch(e) {}
+      return { ...p, photos };
+    });
+
+    const versions = db.prepare(`
+      SELECT gv.*, u.username as creator_name, u.avatar as creator_avatar
+      FROM guide_versions gv
+      LEFT JOIN users u ON gv.created_by = u.id
+      WHERE gv.guide_id = ?
+      ORDER BY gv.version_number DESC
+    `).all(guide.id).map(v => {
+      let snapshot = {};
+      try { snapshot = v.snapshot ? JSON.parse(v.snapshot) : {}; } catch(e) {}
+      return {
+        ...v,
+        snapshot,
+        creator_name: v.creator_name || v.u_username,
+        creator_avatar: v.creator_avatar || v.u_avatar
+      };
+    });
+
+    const canEdit = user_id ? isPlanParticipant(planId, user_id) : false;
+
+    const sharePage = db.prepare('SELECT share_token FROM share_pages WHERE guide_id = ? ORDER BY id DESC LIMIT 1').get(guide.id);
+
+    guide.checkin_points = checkinPoints;
+    guide.versions = versions;
+    guide.can_edit = canEdit;
+    guide.participants_count = plan.current_participants;
+    guide.share_token = sharePage ? sharePage.share_token : null;
+
+    res.json({ success: true, guide, points: checkinPoints });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/plans/:id/guide', (req, res) => {
+  try {
+    const planId = req.params.id;
+    const { user_id, title, description } = req.body;
+
+    if (!user_id) {
+      return res.status(400).json({ error: '缺少用户ID' });
+    }
+
+    if (!isPlanParticipant(planId, user_id)) {
+      return res.status(403).json({ error: '只有活动参与者才能编辑攻略' });
+    }
+
+    let guide = db.prepare('SELECT * FROM route_guides WHERE plan_id = ?').get(planId);
+    if (!guide) {
+      return res.status(404).json({ error: '攻略不存在' });
+    }
+
+    db.prepare(`
+      UPDATE route_guides 
+      SET title = ?, description = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(
+      title !== undefined ? title : guide.title,
+      description !== undefined ? description : guide.description,
+      user_id,
+      guide.id
+    );
+
+    guide = db.prepare('SELECT * FROM route_guides WHERE id = ?').get(guide.id);
+    
+    const checkinPoints = db.prepare(`
+      SELECT * FROM checkin_points 
+      WHERE guide_id = ? 
+      ORDER BY order_index ASC, id ASC
+    `).all(guide.id).map(p => {
+      let photos = [];
+      try { photos = p.photos ? JSON.parse(p.photos) : []; } catch(e) {}
+      return { ...p, photos };
+    });
+    guide.checkin_points = checkinPoints;
+
+    res.json({ success: true, guide });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/plans/:id/guide/version', (req, res) => {
+  try {
+    const planId = req.params.id;
+    const { user_id, version_name, description } = req.body;
+
+    if (!user_id) {
+      return res.status(400).json({ error: '缺少用户ID' });
+    }
+
+    if (!isPlanParticipant(planId, user_id)) {
+      return res.status(403).json({ error: '只有活动参与者才能保存版本' });
+    }
+
+    let guide = db.prepare('SELECT * FROM route_guides WHERE plan_id = ?').get(planId);
+    if (!guide) {
+      return res.status(404).json({ error: '攻略不存在' });
+    }
+
+    const checkinPoints = db.prepare(`
+      SELECT * FROM checkin_points 
+      WHERE guide_id = ? 
+      ORDER BY order_index ASC, id ASC
+    `).all(guide.id).map(p => {
+      let photos = [];
+      try { photos = p.photos ? JSON.parse(p.photos) : []; } catch(e) {}
+      return { ...p, photos };
+    });
+
+    const snapshot = {
+      title: guide.title,
+      description: guide.description,
+      checkin_points: checkinPoints
+    };
+
+    const versionCount = db.prepare('SELECT COUNT(*) as count FROM guide_versions WHERE guide_id = ?').get(guide.id);
+    const count = versionCount ? Object.values(versionCount)[0] : 0;
+
+    const stmt = db.prepare(`
+      INSERT INTO guide_versions (guide_id, version_number, version_name, snapshot, created_by, description)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    const result = stmt.run(
+      guide.id,
+      count + 1,
+      version_name || `版本 ${count + 1}`,
+      JSON.stringify(snapshot),
+      user_id,
+      description || '保存版本'
+    );
+
+    const version = db.prepare(`
+      SELECT gv.*, u.username as creator_name, u.avatar as creator_avatar
+      FROM guide_versions gv
+      LEFT JOIN users u ON gv.created_by = u.id
+      WHERE gv.id = ?
+    `).get(result.lastInsertRowid);
+
+    if (version) {
+      version.snapshot = snapshot;
+      version.creator_name = version.creator_name || version.u_username;
+      version.creator_avatar = version.creator_avatar || version.u_avatar;
+    }
+
+    res.json({ success: true, version });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/plans/:id/guide/versions', (req, res) => {
+  try {
+    const planId = req.params.id;
+
+    let guide = db.prepare('SELECT * FROM route_guides WHERE plan_id = ?').get(planId);
+    if (!guide) {
+      return res.json({ success: true, versions: [] });
+    }
+
+    const versions = db.prepare(`
+      SELECT gv.*, u.username as creator_name, u.avatar as creator_avatar
+      FROM guide_versions gv
+      LEFT JOIN users u ON gv.created_by = u.id
+      WHERE gv.guide_id = ?
+      ORDER BY gv.version_number DESC
+    `).all(guide.id);
+
+    const result = versions.map(v => ({
+      ...v,
+      version_name: v.version_name || `版本 ${v.version_number}`,
+      created_by_name: v.creator_name || '匿名用户'
+    }));
+
+    res.json({ success: true, versions: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/plans/:id/guide/rollback', (req, res) => {
+  try {
+    const planId = req.params.id;
+    const { user_id, version_id } = req.body;
+
+    if (!user_id || !version_id) {
+      return res.status(400).json({ error: '缺少必填字段' });
+    }
+
+    if (!isPlanParticipant(planId, user_id)) {
+      return res.status(403).json({ error: '只有活动参与者才能回退版本' });
+    }
+
+    let guide = db.prepare('SELECT * FROM route_guides WHERE plan_id = ?').get(planId);
+    if (!guide) {
+      return res.status(404).json({ error: '攻略不存在' });
+    }
+
+    const version = db.prepare('SELECT * FROM guide_versions WHERE id = ? AND guide_id = ?').get(version_id, guide.id);
+    if (!version) {
+      return res.status(404).json({ error: '版本不存在' });
+    }
+
+    let snapshot = {};
+    try { snapshot = version.snapshot ? JSON.parse(version.snapshot) : {}; } catch(e) {}
+
+    db.transaction(() => {
+      db.prepare('UPDATE route_guides SET title = ?, description = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(
+        snapshot.title || guide.title,
+        snapshot.description || guide.description,
+        user_id,
+        guide.id
+      );
+
+      db.prepare('DELETE FROM checkin_points WHERE guide_id = ?').run(guide.id);
+
+      if (snapshot.checkin_points && snapshot.checkin_points.length > 0) {
+        const insertStmt = db.prepare(`
+          INSERT INTO checkin_points (guide_id, name, description, location, order_index, collective_review, travel_tips, photos)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        snapshot.checkin_points.forEach((p, idx) => {
+          insertStmt.run(
+            guide.id,
+            p.name || '',
+            p.description || '',
+            p.location || '',
+            p.order_index !== undefined ? p.order_index : idx,
+            p.collective_review || '',
+            p.travel_tips || '',
+            p.photos ? JSON.stringify(p.photos) : ''
+          );
+        });
+      }
+    });
+
+    guide = db.prepare('SELECT * FROM route_guides WHERE id = ?').get(guide.id);
+    const checkinPoints = db.prepare(`
+      SELECT * FROM checkin_points 
+      WHERE guide_id = ? 
+      ORDER BY order_index ASC, id ASC
+    `).all(guide.id).map(p => {
+      let photos = [];
+      try { photos = p.photos ? JSON.parse(p.photos) : []; } catch(e) {}
+      return { ...p, photos };
+    });
+    guide.checkin_points = checkinPoints;
+
+    res.json({ success: true, guide });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/guides/:guideId/points', (req, res) => {
+  try {
+    const guideId = req.params.guideId;
+    const { user_id, name, description, location, collective_review, travel_tips, photos } = req.body;
+
+    if (!user_id || !name) {
+      return res.status(400).json({ error: '缺少必填字段' });
+    }
+
+    const guide = db.prepare('SELECT * FROM route_guides WHERE id = ?').get(guideId);
+    if (!guide) {
+      return res.status(404).json({ error: '攻略不存在' });
+    }
+
+    if (!isPlanParticipant(guide.plan_id, user_id)) {
+      return res.status(403).json({ error: '只有活动参与者才能编辑攻略' });
+    }
+
+    const maxOrder = db.prepare('SELECT MAX(order_index) as max_order FROM checkin_points WHERE guide_id = ?').get(guideId);
+    const nextOrder = (maxOrder && maxOrder.max_order != null) ? maxOrder.max_order + 1 : 0;
+
+    const stmt = db.prepare(`
+      INSERT INTO checkin_points (guide_id, name, description, location, order_index, collective_review, travel_tips, photos)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    const result = stmt.run(
+      guideId,
+      name,
+      description || '',
+      location || '',
+      nextOrder,
+      collective_review || '',
+      travel_tips || '',
+      photos ? JSON.stringify(photos) : ''
+    );
+
+    const point = db.prepare('SELECT * FROM checkin_points WHERE id = ?').get(result.lastInsertRowid);
+    if (point) {
+      let pointPhotos = [];
+      try { pointPhotos = point.photos ? JSON.parse(point.photos) : []; } catch(e) {}
+      point.photos = pointPhotos;
+    }
+
+    db.prepare('UPDATE route_guides SET updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(user_id, guideId);
+
+    res.json({ success: true, point });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/guides/points/:pointId', (req, res) => {
+  try {
+    const pointId = req.params.pointId;
+    const { user_id, name, description, location, collective_review, travel_tips, photos } = req.body;
+
+    if (!user_id) {
+      return res.status(400).json({ error: '缺少用户ID' });
+    }
+
+    const point = db.prepare('SELECT * FROM checkin_points WHERE id = ?').get(pointId);
+    if (!point) {
+      return res.status(404).json({ error: '打卡点不存在' });
+    }
+
+    const guide = db.prepare('SELECT * FROM route_guides WHERE id = ?').get(point.guide_id);
+    if (!guide) {
+      return res.status(404).json({ error: '攻略不存在' });
+    }
+
+    if (!isPlanParticipant(guide.plan_id, user_id)) {
+      return res.status(403).json({ error: '只有活动参与者才能编辑攻略' });
+    }
+
+    db.prepare(`
+      UPDATE checkin_points 
+      SET name = ?, description = ?, location = ?, collective_review = ?, travel_tips = ?, photos = ?
+      WHERE id = ?
+    `).run(
+      name !== undefined ? name : point.name,
+      description !== undefined ? description : point.description,
+      location !== undefined ? location : point.location,
+      collective_review !== undefined ? collective_review : point.collective_review,
+      travel_tips !== undefined ? travel_tips : point.travel_tips,
+      photos !== undefined ? JSON.stringify(photos) : point.photos,
+      pointId
+    );
+
+    const updatedPoint = db.prepare('SELECT * FROM checkin_points WHERE id = ?').get(pointId);
+    if (updatedPoint) {
+      let pointPhotos = [];
+      try { pointPhotos = updatedPoint.photos ? JSON.parse(updatedPoint.photos) : []; } catch(e) {}
+      updatedPoint.photos = pointPhotos;
+    }
+
+    db.prepare('UPDATE route_guides SET updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(user_id, guide.id);
+
+    res.json({ success: true, point: updatedPoint });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/guides/points/:pointId', (req, res) => {
+  try {
+    const pointId = req.params.pointId;
+    const { user_id } = req.body;
+
+    if (!user_id) {
+      return res.status(400).json({ error: '缺少用户ID' });
+    }
+
+    const point = db.prepare('SELECT * FROM checkin_points WHERE id = ?').get(pointId);
+    if (!point) {
+      return res.status(404).json({ error: '打卡点不存在' });
+    }
+
+    const guide = db.prepare('SELECT * FROM route_guides WHERE id = ?').get(point.guide_id);
+    if (!guide) {
+      return res.status(404).json({ error: '攻略不存在' });
+    }
+
+    if (!isPlanParticipant(guide.plan_id, user_id)) {
+      return res.status(403).json({ error: '只有活动参与者才能编辑攻略' });
+    }
+
+    db.prepare('DELETE FROM checkin_points WHERE id = ?').run(pointId);
+    db.prepare('UPDATE route_guides SET updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(user_id, guide.id);
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/guides/:guideId/reorder', (req, res) => {
+  try {
+    const guideId = req.params.guideId;
+    const { user_id, point_ids } = req.body;
+
+    if (!user_id || !point_ids || !Array.isArray(point_ids)) {
+      return res.status(400).json({ error: '缺少必填字段' });
+    }
+
+    const guide = db.prepare('SELECT * FROM route_guides WHERE id = ?').get(guideId);
+    if (!guide) {
+      return res.status(404).json({ error: '攻略不存在' });
+    }
+
+    if (!isPlanParticipant(guide.plan_id, user_id)) {
+      return res.status(403).json({ error: '只有活动参与者才能编辑攻略' });
+    }
+
+    db.transaction(() => {
+      const updateStmt = db.prepare('UPDATE checkin_points SET order_index = ? WHERE id = ?');
+      point_ids.forEach((id, index) => {
+        updateStmt.run(index, id);
+      });
+    });
+
+    db.prepare('UPDATE route_guides SET updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(user_id, guideId);
+
+    const checkinPoints = db.prepare(`
+      SELECT * FROM checkin_points 
+      WHERE guide_id = ? 
+      ORDER BY order_index ASC, id ASC
+    `).all(guideId).map(p => {
+      let photos = [];
+      try { photos = p.photos ? JSON.parse(p.photos) : []; } catch(e) {}
+      return { ...p, photos };
+    });
+
+    res.json({ success: true, points: checkinPoints });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/plans/:id/share', (req, res) => {
+  try {
+    const planId = req.params.id;
+    const { user_id, title, description, summary, photo_ids, selected_photos } = req.body;
+
+    if (!user_id) {
+      return res.status(400).json({ error: '缺少用户ID' });
+    }
+
+    if (!isPlanParticipant(planId, user_id)) {
+      return res.status(403).json({ error: '只有活动参与者才能生成分享页面' });
+    }
+
+    const plan = db.prepare('SELECT * FROM citywalk_plans WHERE id = ?').get(planId);
+    if (!plan) {
+      return res.status(404).json({ error: '计划不存在' });
+    }
+
+    let guide = db.prepare('SELECT * FROM route_guides WHERE plan_id = ?').get(planId);
+    if (!guide) {
+      return res.status(400).json({ error: '请先创建路线攻略' });
+    }
+
+    const shareToken = generateToken();
+    const photos = photo_ids || selected_photos || [];
+    const desc = summary || description || '';
+
+    const stmt = db.prepare(`
+      INSERT INTO share_pages (guide_id, plan_id, share_token, title, summary, selected_photos, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    const result = stmt.run(
+      guide.id,
+      planId,
+      shareToken,
+      title || plan.title + ' - 路线攻略',
+      desc,
+      photos.length > 0 ? JSON.stringify(photos) : '',
+      user_id
+    );
+
+    const sharePage = db.prepare('SELECT * FROM share_pages WHERE id = ?').get(result.lastInsertRowid);
+    if (sharePage) {
+      let photosList = [];
+      try { photosList = sharePage.selected_photos ? JSON.parse(sharePage.selected_photos) : []; } catch(e) {}
+      sharePage.selected_photos = photosList;
+      sharePage.share_url = `/share/${shareToken}`;
+      sharePage.share_token = shareToken;
+    }
+
+    res.json({ success: true, share: sharePage, share_page: sharePage });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/share/:token', (req, res) => {
+  try {
+    const token = req.params.token;
+
+    const sharePage = db.prepare('SELECT * FROM share_pages WHERE share_token = ?').get(token);
+    if (!sharePage) {
+      return res.status(404).json({ error: '分享页面不存在' });
+    }
+
+    let selectedPhotos = [];
+    try { selectedPhotos = sharePage.selected_photos ? JSON.parse(sharePage.selected_photos) : []; } catch(e) {}
+    sharePage.selected_photos = selectedPhotos;
+
+    const plan = db.prepare(`
+      SELECT p.*, u.username as creator_name, u.avatar as creator_avatar
+      FROM citywalk_plans p
+      LEFT JOIN users u ON p.creator_id = u.id
+      WHERE p.id = ?
+    `).get(sharePage.plan_id);
+
+    if (plan) {
+      plan.creator = {
+        id: plan.creator_id,
+        username: plan.creator_name || plan.u_username,
+        avatar: plan.creator_avatar || plan.u_avatar
+      };
+      delete plan.creator_name;
+      delete plan.creator_avatar;
+    }
+
+    const participants = db.prepare(`
+      SELECT u.id, u.username, u.avatar, pp.role
+      FROM plan_participants pp
+      LEFT JOIN users u ON pp.user_id = u.id
+      WHERE pp.plan_id = ?
+    `).all(sharePage.plan_id);
+
+    const guide = db.prepare('SELECT * FROM route_guides WHERE id = ?').get(sharePage.guide_id);
+    let checkinPoints = [];
+    if (guide) {
+      checkinPoints = db.prepare(`
+        SELECT * FROM checkin_points 
+        WHERE guide_id = ? 
+        ORDER BY order_index ASC, id ASC
+      `).all(guide.id).map(p => {
+        let photos = [];
+        try { photos = p.photos ? JSON.parse(p.photos) : []; } catch(e) {}
+        return { ...p, photos };
+      });
+    }
+
+    const photos = db.prepare(`
+      SELECT ph.*, u.username as author_name, u.avatar as author_avatar
+      FROM activity_photos ph
+      LEFT JOIN users u ON ph.user_id = u.id
+      WHERE ph.plan_id = ?
+      ORDER BY ph.created_at DESC
+      LIMIT 30
+    `).all(sharePage.plan_id).map(ph => ({
+      ...ph,
+      author_name: ph.author_name || ph.u_username,
+      author_avatar: ph.author_avatar || ph.u_avatar
+    }));
+
+    res.json({
+      success: true,
+      share_page: sharePage,
+      plan,
+      participants,
+      guide: guide ? { ...guide, checkin_points: checkinPoints } : null,
+      photos
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/share', (req, res) => {
+  const token = req.query.token;
+  if (!token) {
+    return res.redirect('/');
+  }
+  res.sendFile(path.join(__dirname, '..', 'public', 'share.html'));
+});
+
 app.listen(PORT, () => {
   console.log(`🚀 Citywalk Server running on http://localhost:${PORT}`);
   console.log(`📁 Static files served from: ${path.join(__dirname, '..', 'public')}`);

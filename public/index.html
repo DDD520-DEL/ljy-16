@@ -667,6 +667,152 @@
       </div>
     </div>
 
+    <div id="guideEditorModal" class="modal">
+      <div class="modal-content guide-editor-modal">
+        <div class="modal-header">
+          <h2 id="guideEditorTitle">📝 路线攻略协同编辑</h2>
+          <button class="close-btn" id="closeGuideEditorBtn">×</button>
+        </div>
+        <div class="guide-editor-body">
+          <div class="guide-editor-sidebar">
+            <div class="guide-info-section">
+              <div class="form-group">
+                <label>攻略标题</label>
+                <input type="text" id="guideTitleInput" placeholder="输入攻略标题">
+              </div>
+              <div class="form-group">
+                <label>攻略描述</label>
+                <textarea id="guideDescInput" rows="3" placeholder="简单描述一下这次Citywalk..."></textarea>
+              </div>
+              <button class="btn btn-primary btn-sm btn-block" id="saveGuideBasicBtn" style="margin-bottom:12px;">
+                💾 保存攻略信息
+              </button>
+              <div class="guide-meta">
+                <span class="guide-participants">👥 <span id="guideParticipantsCount">0</span> 人协同编辑</span>
+                <span class="guide-updated" id="guideUpdatedTime"></span>
+              </div>
+            </div>
+            <div class="guide-actions-section">
+              <button class="btn btn-primary btn-block" id="saveVersionBtn">
+                💾 保存版本
+              </button>
+              <button class="btn btn-outline btn-block" id="viewHistoryBtn">
+                📜 版本历史
+              </button>
+              <button class="btn btn-outline btn-block" id="generateShareBtn">
+                🔗 生成分享页
+              </button>
+            </div>
+          </div>
+          <div class="guide-editor-main">
+            <div class="checkin-points-header">
+              <h3>🗺️ 打卡点路线</h3>
+              <button class="btn btn-primary btn-sm" id="addCheckinPointBtn">
+                ＋ 添加打卡点
+              </button>
+            </div>
+            <div class="checkin-points-tip">💡 拖拽卡片可调整顺序</div>
+            <div id="checkinPointsList" class="checkin-points-list"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="checkinPointModal" class="modal">
+      <div class="modal-content note-modal">
+        <div class="modal-header">
+          <h2 id="checkinPointModalTitle">📍 添加打卡点</h2>
+          <button class="close-btn" id="closeCheckinPointBtn">×</button>
+        </div>
+        <form id="checkinPointForm">
+          <input type="hidden" id="checkinPointId">
+          <div class="form-group">
+            <label>打卡点名称 *</label>
+            <input type="text" id="checkinPointName" placeholder="例如：武康大楼" required>
+          </div>
+          <div class="form-group">
+            <label>地点</label>
+            <input type="text" id="checkinPointLocation" placeholder="在哪里？">
+          </div>
+          <div class="form-group">
+            <label>打卡点描述</label>
+            <textarea id="checkinPointDescription" rows="3" placeholder="描述一下这个打卡点..."></textarea>
+          </div>
+          <div class="form-group">
+            <label>🌟 集体评价</label>
+            <textarea id="checkinPointReview" rows="3" placeholder="大家一起总结这个打卡点的感受..."></textarea>
+          </div>
+          <div class="form-group">
+            <label>💡 出行小贴士</label>
+            <textarea id="checkinPointTips" rows="3" placeholder="实用的出行建议和小贴士..."></textarea>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-outline" id="cancelCheckinPointBtn">取消</button>
+            <button type="submit" class="btn btn-primary">保存打卡点 ✨</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div id="versionHistoryModal" class="modal">
+      <div class="modal-content" style="max-width: 600px;">
+        <div class="modal-header">
+          <h2>📜 版本历史</h2>
+          <button class="close-btn" id="closeVersionHistoryBtn">×</button>
+        </div>
+        <div class="version-history-body">
+          <div id="versionHistoryList" class="version-history-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="shareGeneratorModal" class="modal">
+      <div class="modal-content" style="max-width: 560px;">
+        <div class="modal-header">
+          <h2>🔗 生成分享页面</h2>
+          <button class="close-btn" id="closeShareGeneratorBtn">×</button>
+        </div>
+        <div class="share-generator-body">
+          <div class="form-group">
+            <label>分享页面标题</label>
+            <input type="text" id="shareTitleInput" placeholder="输入分享页标题">
+          </div>
+          <div class="form-group">
+            <label>路线总结</label>
+            <textarea id="shareSummaryInput" rows="4" placeholder="写一段精彩的路线总结..."></textarea>
+          </div>
+          <div class="form-group">
+            <label>精选照片</label>
+            <div id="sharePhotosSelector" class="share-photos-selector"></div>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-outline" id="cancelShareBtn">取消</button>
+            <button type="button" class="btn btn-primary" id="confirmShareBtn">生成分享页 🌟</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="shareResultModal" class="modal">
+      <div class="modal-content" style="max-width: 500px;">
+        <div class="modal-header">
+          <h2>🎉 分享页生成成功</h2>
+          <button class="close-btn" id="closeShareResultBtn">×</button>
+        </div>
+        <div class="share-result-body">
+          <div class="share-result-icon">🎁</div>
+          <p>你的专属路线分享页已经生成啦！</p>
+          <div class="share-link-box">
+            <input type="text" id="shareLinkInput" readonly>
+            <button class="btn btn-primary btn-sm" id="copyShareLinkBtn">复制链接</button>
+          </div>
+          <button class="btn btn-outline btn-block" id="openSharePageBtn">
+            👀 预览分享页
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div id="toast" class="toast hidden"></div>
 
     <div id="userProfileModal" class="modal">

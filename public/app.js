@@ -1054,6 +1054,9 @@ async function openPlanDetail(planId) {
           <div class="detail-tab ${currentDetailTab === 'photos' ? 'active' : ''}" data-tab="photos" onclick="switchDetailTab('photos')">
             📸 照片墙 (<span id="photoCount">0</span>)
           </div>
+          <div class="detail-tab ${currentDetailTab === 'guide' ? 'active' : ''}" data-tab="guide" onclick="switchDetailTab('guide')">
+            🗺️ 路线攻略
+          </div>
         </div>
         
         <div id="notesTabContent" class="tab-content ${currentDetailTab === 'notes' ? 'active' : ''}" style="display: ${currentDetailTab === 'notes' ? 'block' : 'none'};">
@@ -1076,6 +1079,15 @@ async function openPlanDetail(planId) {
               <div class="empty-state-icon" style="font-size:48px;">📸</div>
               <h3>暂无照片</h3>
               <p>${isJoined ? '点击上方按钮上传你的Citywalk精彩瞬间吧！' : '加入活动后即可上传照片'}</p>
+            </div>
+          </div>
+        </div>
+        
+        <div id="guideTabContent" class="tab-content" style="display: ${currentDetailTab === 'guide' ? 'block' : 'none'};">
+          <div id="guideTabInner">
+            <div class="empty-state" style="padding: 30px;">
+              <div class="empty-state-icon" style="font-size:48px;">🗺️</div>
+              <h3>加载中...</h3>
             </div>
           </div>
         </div>
@@ -1200,9 +1212,13 @@ function switchDetailTab(tab) {
   });
   document.getElementById('notesTabContent').style.display = tab === 'notes' ? 'block' : 'none';
   document.getElementById('photosTabContent').style.display = tab === 'photos' ? 'block' : 'none';
+  document.getElementById('guideTabContent').style.display = tab === 'guide' ? 'block' : 'none';
   
   if (tab === 'photos' && currentDetailPlanId) {
     loadPlanPhotos(currentDetailPlanId);
+  }
+  if (tab === 'guide' && currentDetailPlanId) {
+    loadGuideTab(currentDetailPlanId);
   }
 }
 
@@ -3215,6 +3231,11 @@ async function init() {
   document.getElementById('userProfileModal').classList.add('hidden');
   document.getElementById('followListModal').classList.add('hidden');
   document.getElementById('dateActivityModal').classList.add('hidden');
+  document.getElementById('guideEditorModal').classList.add('hidden');
+  document.getElementById('checkinPointModal').classList.add('hidden');
+  document.getElementById('versionHistoryModal').classList.add('hidden');
+  document.getElementById('shareGeneratorModal').classList.add('hidden');
+  document.getElementById('shareResultModal').classList.add('hidden');
   document.getElementById('toast').classList.add('hidden');
   
   initEventListeners();
@@ -3223,6 +3244,7 @@ async function init() {
   initRatingModalEvents();
   initFollowModalEvents();
   initCalendarEvents();
+  initGuideEditor();
   
   const savedUser = loadUser();
   if (savedUser) {
@@ -3356,6 +3378,670 @@ async function loadRecommendations() {
   } else {
     container.classList.add('hidden');
   }
+}
+
+let currentGuide = null;
+let currentGuidePlanId = null;
+let currentCheckinPoints = [];
+let editingPointId = null;
+let draggedPointId = null;
+let selectedSharePhotos = [];
+
+function initGuideEditor() {
+  const closeGuideBtn = document.getElementById('closeGuideEditorBtn');
+  if (closeGuideBtn) {
+    closeGuideBtn.addEventListener('click', closeGuideEditor);
+  }
+  
+  const addCheckinBtn = document.getElementById('addCheckinPointBtn');
+  if (addCheckinBtn) {
+    addCheckinBtn.addEventListener('click', openCheckinPointModal);
+  }
+  
+  const saveVersionBtn = document.getElementById('saveVersionBtn');
+  if (saveVersionBtn) {
+    saveVersionBtn.addEventListener('click', saveVersion);
+  }
+  
+  const viewHistoryBtn = document.getElementById('viewHistoryBtn');
+  if (viewHistoryBtn) {
+    viewHistoryBtn.addEventListener('click', openVersionHistory);
+  }
+  
+  const generateShareBtn = document.getElementById('generateShareBtn');
+  if (generateShareBtn) {
+    generateShareBtn.addEventListener('click', openShareGenerator);
+  }
+  
+  const saveGuideBasicBtn = document.getElementById('saveGuideBasicBtn');
+  if (saveGuideBasicBtn) {
+    saveGuideBasicBtn.addEventListener('click', saveGuideBasic);
+  }
+  
+  const closeCheckinBtn = document.getElementById('closeCheckinPointBtn');
+  if (closeCheckinBtn) {
+    closeCheckinBtn.addEventListener('click', closeCheckinPointModal);
+  }
+  
+  const cancelCheckinBtn = document.getElementById('cancelCheckinPointBtn');
+  if (cancelCheckinBtn) {
+    cancelCheckinBtn.addEventListener('click', closeCheckinPointModal);
+  }
+  
+  const checkinForm = document.getElementById('checkinPointForm');
+  if (checkinForm) {
+    checkinForm.addEventListener('submit', handleCheckinPointSubmit);
+  }
+  
+  const closeVersionBtn = document.getElementById('closeVersionHistoryBtn');
+  if (closeVersionBtn) {
+    closeVersionBtn.addEventListener('click', closeVersionHistoryModal);
+  }
+  
+  const closeShareGenBtn = document.getElementById('closeShareGeneratorBtn');
+  if (closeShareGenBtn) {
+    closeShareGenBtn.addEventListener('click', closeShareGeneratorModal);
+  }
+  
+  const cancelShareBtn = document.getElementById('cancelShareBtn');
+  if (cancelShareBtn) {
+    cancelShareBtn.addEventListener('click', closeShareGeneratorModal);
+  }
+  
+  const confirmShareBtn = document.getElementById('confirmShareBtn');
+  if (confirmShareBtn) {
+    confirmShareBtn.addEventListener('click', handleShareGenerateClick);
+  }
+  
+  const closeShareResultBtn = document.getElementById('closeShareResultBtn');
+  if (closeShareResultBtn) {
+    closeShareResultBtn.addEventListener('click', closeShareResultModal);
+  }
+  
+  const copyShareLinkBtn = document.getElementById('copyShareLinkBtn');
+  if (copyShareLinkBtn) {
+    copyShareLinkBtn.addEventListener('click', copyShareLink);
+  }
+  
+  const openSharePageBtn = document.getElementById('openSharePageBtn');
+  if (openSharePageBtn) {
+    openSharePageBtn.addEventListener('click', openSharePageFromResult);
+  }
+}
+
+async function loadGuideTab(planId) {
+  const container = document.getElementById('guideTabInner');
+  if (!container) return;
+  
+  try {
+    const params = new URLSearchParams();
+    if (currentUser) params.set('user_id', currentUser.id);
+    
+    const res = await api(`${API}/plans/${planId}/guide?${params}`);
+    if (res.success && res.guide) {
+      currentGuide = res.guide;
+      currentCheckinPoints = res.points || [];
+      renderGuideTab(planId, res.guide, res.points || []);
+    } else {
+      renderGuideTabEmpty(planId);
+    }
+  } catch (e) {
+    container.innerHTML = `
+      <div class="empty-state" style="padding: 30px;">
+        <div class="empty-state-icon" style="font-size:48px;">❌</div>
+        <h3>加载失败</h3>
+        <p>${e.message || '请稍后重试'}</p>
+      </div>
+    `;
+  }
+}
+
+function renderGuideTab(planId, guide, points) {
+  const container = document.getElementById('guideTabInner');
+  const canEdit = guide.can_edit;
+  
+  let pointsHtml = '';
+  if (points.length > 0) {
+    pointsHtml = `
+      <div class="checkin-points-preview">
+        ${points.map((p, i) => `
+          <div class="checkin-point-preview">
+            <div class="checkin-point-num">${i + 1}</div>
+            <div class="checkin-point-info">
+              <div class="checkin-point-name">${p.name}</div>
+              ${p.collective_review || p.review ? `<div class="checkin-point-review">${(p.collective_review || p.review).substring(0, 50)}${(p.collective_review || p.review).length > 50 ? '...' : ''}</div>` : ''}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  } else {
+    pointsHtml = `
+      <div class="empty-state" style="padding: 20px;">
+        <div class="empty-state-icon" style="font-size:36px;">📍</div>
+        <h4 style="margin:8px 0;">还没有打卡点</h4>
+      </div>
+    `;
+  }
+  
+  container.innerHTML = `
+    <div style="display:flex;align-items:center;margin-bottom:16px;">
+      <h3 style="margin:0;">🗺️ 路线攻略</h3>
+      ${canEdit ? `
+        <button class="btn btn-primary" style="margin-left:auto;font-size:12px;padding:6px 14px;" 
+                onclick="openGuideEditor(${planId})">✏️ 编辑攻略</button>
+      ` : ''}
+    </div>
+    
+    ${guide.title ? `<h4 style="margin:0 0 8px 0;">${guide.title}</h4>` : ''}
+    ${guide.description ? `<p style="color:var(--text-secondary);margin:0 0 16px 0;">${guide.description}</p>` : ''}
+    
+    ${pointsHtml}
+    
+    ${guide.share_token ? `
+      <div style="margin-top:16px;padding:12px;background:var(--bg-secondary);border-radius:8px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span>🔗 已生成分享页面</span>
+          <button class="btn btn-outline" style="font-size:12px;padding:4px 10px;margin-left:auto;"
+                  onclick="viewSharePage('${guide.share_token}')">查看分享</button>
+        </div>
+      </div>
+    ` : ''}
+  `;
+}
+
+function renderGuideTabEmpty(planId) {
+  const container = document.getElementById('guideTabInner');
+  const canEdit = currentUser && isPlanParticipantLocal(planId);
+  
+  container.innerHTML = `
+    <div class="empty-state" style="padding: 30px;">
+      <div class="empty-state-icon" style="font-size:48px;">🗺️</div>
+      <h3>还没有路线攻略</h3>
+      <p>记录你们的Citywalk精彩路线吧</p>
+      ${canEdit ? `
+        <button class="btn btn-primary" style="margin-top:16px;" onclick="openGuideEditor(${planId})">
+          📝 创建攻略
+        </button>
+      ` : ''}
+    </div>
+  `;
+}
+
+function isPlanParticipantLocal(planId) {
+  return true;
+}
+
+async function openGuideEditor(planId) {
+  currentGuidePlanId = planId;
+  
+  try {
+    const params = new URLSearchParams();
+    if (currentUser) params.set('user_id', currentUser.id);
+    
+    const res = await api(`${API}/plans/${planId}/guide?${params}`);
+    if (res.success && res.guide) {
+      currentGuide = res.guide;
+      currentCheckinPoints = res.points || [];
+    } else {
+      currentGuide = { id: null, title: '', description: '' };
+      currentCheckinPoints = [];
+    }
+    
+    renderGuideEditor();
+    document.getElementById('guideEditorModal').classList.remove('hidden');
+  } catch (e) {
+    showToast('加载攻略失败', 'error');
+  }
+}
+
+function closeGuideEditor() {
+  document.getElementById('guideEditorModal').classList.add('hidden');
+  currentGuide = null;
+  currentGuidePlanId = null;
+  currentCheckinPoints = [];
+  
+  if (currentDetailTab === 'guide' && currentDetailPlanId) {
+    loadGuideTab(currentDetailPlanId);
+  }
+}
+
+function renderGuideEditor() {
+  const titleInput = document.getElementById('guideTitleInput');
+  const descInput = document.getElementById('guideDescInput');
+  const pointsList = document.getElementById('checkinPointsList');
+  const participantsCount = document.getElementById('guideParticipantsCount');
+  const updatedTime = document.getElementById('guideUpdatedTime');
+  
+  if (titleInput) titleInput.value = currentGuide?.title || '';
+  if (descInput) descInput.value = currentGuide?.description || '';
+  if (participantsCount) participantsCount.textContent = currentGuide?.participants_count || 0;
+  if (updatedTime && currentGuide?.updated_at) {
+    updatedTime.textContent = `更新于 ${formatCommentTime(currentGuide.updated_at)}`;
+  }
+  
+  if (pointsList) {
+    if (currentCheckinPoints.length === 0) {
+      pointsList.innerHTML = `
+        <div class="empty-state" style="padding: 40px 20px;">
+          <div class="empty-state-icon">📍</div>
+          <h3>还没有打卡点</h3>
+          <p>点击上方按钮添加第一个打卡点</p>
+        </div>
+      `;
+    } else {
+      pointsList.innerHTML = currentCheckinPoints.map((p, i) => `
+        <div class="checkin-point-card" draggable="true" data-point-id="${p.id}" data-index="${i}">
+          <div class="drag-handle">⋮⋮</div>
+          <div class="checkin-point-num">${i + 1}</div>
+          <div class="checkin-point-content">
+            <div class="checkin-point-name">${p.name}</div>
+            ${p.location ? `<div class="checkin-point-location">📍 ${p.location}</div>` : ''}
+            ${p.description ? `<div class="checkin-point-desc">${p.description}</div>` : ''}
+            ${p.collective_review || p.review ? `<div class="checkin-point-review">⭐ ${p.collective_review || p.review}</div>` : ''}
+            ${p.travel_tips || p.tips ? `<div class="checkin-point-tips">💡 ${p.travel_tips || p.tips}</div>` : ''}
+          </div>
+          <div class="checkin-point-actions">
+            <button class="btn btn-outline" style="padding:4px 10px;font-size:12px;"
+                    onclick="editCheckinPoint(${p.id})">编辑</button>
+            <button class="btn btn-outline" style="padding:4px 10px;font-size:12px;color:var(--danger);border-color:var(--danger);"
+                    onclick="deleteCheckinPoint(${p.id})">删除</button>
+          </div>
+        </div>
+      `).join('');
+      
+      initDragAndDrop();
+    }
+  }
+}
+
+function initDragAndDrop() {
+  const cards = document.querySelectorAll('.checkin-point-card');
+  
+  cards.forEach(card => {
+    card.addEventListener('dragstart', handleDragStart);
+    card.addEventListener('dragend', handleDragEnd);
+    card.addEventListener('dragover', handleDragOver);
+    card.addEventListener('drop', handleDrop);
+    card.addEventListener('dragleave', handleDragLeave);
+  });
+}
+
+function handleDragStart(e) {
+  draggedPointId = Number(e.target.closest('.checkin-point-card').dataset.pointId);
+  e.target.closest('.checkin-point-card').classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+function handleDragEnd(e) {
+  e.target.closest('.checkin-point-card').classList.remove('dragging');
+  document.querySelectorAll('.checkin-point-card').forEach(c => c.classList.remove('drag-over'));
+  draggedPointId = null;
+}
+
+function handleDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const card = e.target.closest('.checkin-point-card');
+  if (card && Number(card.dataset.pointId) !== draggedPointId) {
+    card.classList.add('drag-over');
+  }
+}
+
+function handleDragLeave(e) {
+  const card = e.target.closest('.checkin-point-card');
+  if (card) {
+    card.classList.remove('drag-over');
+  }
+}
+
+async function handleDrop(e) {
+  e.preventDefault();
+  const targetCard = e.target.closest('.checkin-point-card');
+  if (!targetCard || !draggedPointId) return;
+  
+  const targetId = Number(targetCard.dataset.pointId);
+  if (targetId === draggedPointId) return;
+  
+  targetCard.classList.remove('drag-over');
+  
+  const draggedIndex = currentCheckinPoints.findIndex(p => p.id === draggedPointId);
+  const targetIndex = currentCheckinPoints.findIndex(p => p.id === targetId);
+  
+  if (draggedIndex === -1 || targetIndex === -1) return;
+  
+  const [removed] = currentCheckinPoints.splice(draggedIndex, 1);
+  currentCheckinPoints.splice(targetIndex, 0, removed);
+  
+  renderGuideEditor();
+  
+  if (currentGuide?.id) {
+    const pointIds = currentCheckinPoints.map(p => p.id);
+    try {
+      await api(`${API}/guides/${currentGuide.id}/reorder`, {
+        method: 'POST',
+        body: JSON.stringify({ point_ids: pointIds, user_id: currentUser.id })
+      });
+    } catch (e) {
+      showToast('排序保存失败', 'error');
+    }
+  }
+}
+
+function openCheckinPointModal() {
+  editingPointId = null;
+  document.getElementById('checkinPointModalTitle').textContent = '📍 添加打卡点';
+  document.getElementById('checkinPointName').value = '';
+  document.getElementById('checkinPointLocation').value = '';
+  document.getElementById('checkinPointDescription').value = '';
+  document.getElementById('checkinPointReview').value = '';
+  document.getElementById('checkinPointTips').value = '';
+  document.getElementById('checkinPointModal').classList.remove('hidden');
+}
+
+function editCheckinPoint(pointId) {
+  const point = currentCheckinPoints.find(p => p.id === pointId);
+  if (!point) return;
+  
+  editingPointId = pointId;
+  document.getElementById('checkinPointModalTitle').textContent = '✏️ 编辑打卡点';
+  document.getElementById('checkinPointName').value = point.name || '';
+  document.getElementById('checkinPointLocation').value = point.location || '';
+  document.getElementById('checkinPointDescription').value = point.description || '';
+  document.getElementById('checkinPointReview').value = point.collective_review || point.review || '';
+  document.getElementById('checkinPointTips').value = point.travel_tips || point.tips || '';
+  document.getElementById('checkinPointModal').classList.remove('hidden');
+}
+
+function closeCheckinPointModal() {
+  document.getElementById('checkinPointModal').classList.add('hidden');
+  editingPointId = null;
+}
+
+async function handleCheckinPointSubmit(e) {
+  e.preventDefault();
+  
+  const name = document.getElementById('checkinPointName').value.trim();
+  const location = document.getElementById('checkinPointLocation').value.trim();
+  const description = document.getElementById('checkinPointDescription').value.trim();
+  const collective_review = document.getElementById('checkinPointReview').value.trim();
+  const travel_tips = document.getElementById('checkinPointTips').value.trim();
+  
+  if (!name) {
+    showToast('请输入打卡点名称', 'warning');
+    return;
+  }
+  
+  if (!currentGuide?.id) {
+    await ensureGuideExists();
+  }
+  
+  if (editingPointId) {
+    try {
+      const res = await api(`${API}/guides/points/${editingPointId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ name, location, description, collective_review, travel_tips, user_id: currentUser.id })
+      });
+      if (res.success) {
+        const idx = currentCheckinPoints.findIndex(p => p.id === editingPointId);
+        if (idx !== -1) {
+          currentCheckinPoints[idx] = { ...currentCheckinPoints[idx], name, location, description, collective_review, travel_tips };
+        }
+        showToast('更新成功', 'success');
+      }
+    } catch (e) {
+      showToast('更新失败', 'error');
+      return;
+    }
+  } else {
+    try {
+      const res = await api(`${API}/guides/${currentGuide.id}/points`, {
+        method: 'POST',
+        body: JSON.stringify({ name, location, description, collective_review, travel_tips, user_id: currentUser.id })
+      });
+      if (res.success) {
+        currentCheckinPoints.push(res.point);
+        showToast('添加成功', 'success');
+      }
+    } catch (e) {
+      showToast('添加失败', 'error');
+      return;
+    }
+  }
+  
+  closeCheckinPointModal();
+  renderGuideEditor();
+}
+
+async function deleteCheckinPoint(pointId) {
+  if (!confirm('确定删除这个打卡点吗？')) return;
+  
+  try {
+    await api(`${API}/guides/points/${pointId}`, { method: 'DELETE' });
+    currentCheckinPoints = currentCheckinPoints.filter(p => p.id !== pointId);
+    renderGuideEditor();
+    showToast('删除成功', 'success');
+  } catch (e) {
+    showToast('删除失败', 'error');
+  }
+}
+
+async function ensureGuideExists() {
+  if (currentGuide?.id) return;
+  
+  try {
+    const res = await api(`${API}/plans/${currentGuidePlanId}/guide`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        title: '我的Citywalk路线攻略',
+        description: '',
+        user_id: currentUser.id
+      })
+    });
+    if (res.success) {
+      currentGuide = res.guide;
+    }
+  } catch (e) {
+    showToast('创建攻略失败', 'error');
+  }
+}
+
+async function saveGuideBasic() {
+  const title = document.getElementById('guideTitleInput').value.trim();
+  const description = document.getElementById('guideDescInput').value.trim();
+  
+  try {
+    const res = await api(`${API}/plans/${currentGuidePlanId}/guide`, {
+      method: 'PUT',
+      body: JSON.stringify({ title, description, user_id: currentUser.id })
+    });
+    if (res.success) {
+      currentGuide = res.guide;
+      showToast('保存成功', 'success');
+    }
+  } catch (e) {
+    showToast('保存失败', 'error');
+  }
+}
+
+async function openVersionHistory() {
+  if (!currentGuide?.id) {
+    showToast('请先创建攻略', 'warning');
+    return;
+  }
+  
+  try {
+    const res = await api(`${API}/plans/${currentGuidePlanId}/guide/versions`);
+    if (res.success) {
+      renderVersionHistory(res.versions || []);
+      document.getElementById('versionHistoryModal').classList.remove('hidden');
+    }
+  } catch (e) {
+    showToast('加载版本历史失败', 'error');
+  }
+}
+
+function renderVersionHistory(versions) {
+  const list = document.getElementById('versionHistoryList');
+  if (!list) return;
+  
+  if (versions.length === 0) {
+    list.innerHTML = `
+      <div class="empty-state" style="padding: 40px 20px;">
+        <div class="empty-state-icon">📜</div>
+        <h3>暂无历史版本</h3>
+        <p>保存版本后会在这里显示</p>
+      </div>
+    `;
+    return;
+  }
+  
+  list.innerHTML = versions.map(v => `
+    <div class="version-item">
+      <div class="version-info">
+        <div class="version-title">${v.version_name || `版本 ${v.version_number}`}</div>
+        <div class="version-meta">
+          <span>${v.created_by_name || '匿名用户'}</span>
+          <span>·</span>
+          <span>${formatCommentTime(v.created_at)}</span>
+        </div>
+        ${v.description ? `<div class="version-desc">${v.description}</div>` : ''}
+      </div>
+      <button class="btn btn-outline" style="font-size:12px;padding:6px 12px;"
+              onclick="rollbackVersion(${v.id})">回退到此版本</button>
+    </div>
+  `).join('');
+}
+
+async function saveVersion() {
+  if (!currentGuide?.id) {
+    showToast('请先创建攻略', 'warning');
+    return;
+  }
+  
+  const versionName = prompt('请输入版本名称：', `版本 ${new Date().toLocaleString('zh-CN')}`);
+  if (!versionName) return;
+  
+  const versionDesc = prompt('请输入版本描述（可选）：', '');
+  
+  try {
+    const res = await api(`${API}/plans/${currentGuidePlanId}/guide/version`, {
+      method: 'POST',
+      body: JSON.stringify({
+        version_name: versionName,
+        description: versionDesc,
+        user_id: currentUser.id
+      })
+    });
+    if (res.success) {
+      showToast('版本保存成功', 'success');
+    }
+  } catch (e) {
+    showToast('保存失败', 'error');
+  }
+}
+
+async function rollbackVersion(versionId) {
+  if (!confirm('确定要回退到此版本吗？当前内容将被覆盖。')) return;
+  
+  try {
+    const res = await api(`${API}/plans/${currentGuidePlanId}/guide/rollback`, {
+      method: 'POST',
+      body: JSON.stringify({ version_id: versionId, user_id: currentUser.id })
+    });
+    if (res.success) {
+      currentGuide = res.guide;
+      currentCheckinPoints = res.points || [];
+      renderGuideEditor();
+      document.getElementById('versionHistoryModal').classList.add('hidden');
+      showToast('回退成功', 'success');
+    }
+  } catch (e) {
+    showToast('回退失败', 'error');
+  }
+}
+
+function closeVersionHistoryModal() {
+  document.getElementById('versionHistoryModal').classList.add('hidden');
+}
+
+async function openShareGenerator() {
+  if (!currentGuide?.id) {
+    showToast('请先创建攻略', 'warning');
+    return;
+  }
+  
+  selectedSharePhotos = [];
+  document.getElementById('shareTitleInput').value = currentGuide?.title || '';
+  document.getElementById('shareSummaryInput').value = currentGuide?.description || '';
+  
+  await loadSharePhotos();
+  document.getElementById('shareGeneratorModal').classList.remove('hidden');
+}
+
+function handleShareGenerateClick() {
+  const title = document.getElementById('shareTitleInput').value.trim();
+  const summary = document.getElementById('shareSummaryInput').value.trim();
+  
+  if (!title) {
+    showToast('请输入分享标题', 'warning');
+    return;
+  }
+  
+  handleShareGenerate({ title, summary, photo_ids: selectedSharePhotos });
+}
+
+async function handleShareGenerate(data) {
+  try {
+    const res = await api(`${API}/plans/${currentGuidePlanId}/share`, {
+      method: 'POST',
+      body: JSON.stringify({
+        title: data.title,
+        summary: data.summary,
+        photo_ids: data.photo_ids,
+        user_id: currentUser.id
+      })
+    });
+    
+    if (res.success) {
+      showShareResult(res.share || res.share_page);
+    }
+  } catch (e) {
+    showToast('生成分享页面失败', 'error');
+  }
+}
+
+function showShareResult(share) {
+  document.getElementById('shareGeneratorModal').classList.add('hidden');
+  
+  const shareUrl = `${window.location.origin}/share.html?token=${share.share_token}`;
+  document.getElementById('shareLinkInput').value = shareUrl;
+  document.getElementById('shareResultModal').classList.remove('hidden');
+}
+
+function copyShareLink() {
+  const input = document.getElementById('shareLinkInput');
+  input.select();
+  document.execCommand('copy');
+  showToast('链接已复制到剪贴板', 'success');
+}
+
+function viewSharePage(token) {
+  window.open(`/share.html?token=${token}`, '_blank');
+}
+
+function openSharePageFromResult() {
+  const url = document.getElementById('shareLinkInput').value;
+  window.open(url, '_blank');
+}
+
+function closeShareGeneratorModal() {
+  document.getElementById('shareGeneratorModal').classList.add('hidden');
+  selectedSharePhotos = [];
+}
+
+function closeShareResultModal() {
+  document.getElementById('shareResultModal').classList.add('hidden');
 }
 
 document.addEventListener('DOMContentLoaded', init);
