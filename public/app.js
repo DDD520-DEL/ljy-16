@@ -13,6 +13,11 @@ let replyingToUserName = '';
 let currentRatingPlanId = null;
 let currentRatings = { route_design: 0, organization: 0, partner_fit: 0 };
 let currentTimelineFilter = 'all';
+let currentView = 'list';
+let currentCalendarDate = new Date();
+let calendarPlans = [];
+let currentDateTab = 'recruiting';
+let selectedDatePlans = [];
 
 const avatarPool = ['🧑', '👩', '👨', '👧', '👦', '🧔', '👵', '👴', '🧑‍🎨', '👨‍🍳', '👩‍💻', '🧑‍🚀', '🎨', '📷', '🎭', '🎵'];
 
@@ -252,6 +257,262 @@ async function loadDiscoverPlans() {
       </div>
     `;
   }
+  
+  if (currentView === 'calendar') {
+    calendarPlans = res.success ? res.plans : [];
+    renderCalendar();
+  }
+}
+
+function switchView(view) {
+  currentView = view;
+  
+  document.querySelectorAll('.view-toggle-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.view === view);
+  });
+  
+  const plansGrid = document.getElementById('discoverPlans');
+  const calendarView = document.getElementById('calendarView');
+  
+  if (view === 'list') {
+    plansGrid.classList.remove('hidden');
+    calendarView.classList.add('hidden');
+  } else {
+    plansGrid.classList.add('hidden');
+    calendarView.classList.remove('hidden');
+    loadCalendarData();
+  }
+}
+
+async function loadCalendarData() {
+  const params = new URLSearchParams();
+  if (currentCityFilter) params.set('city', currentCityFilter);
+  if (currentThemeFilter) params.set('theme', currentThemeFilter);
+  if (currentKeyword) params.set('keyword', currentKeyword);
+  if (currentUser) params.set('user_id', currentUser.id);
+  params.set('limit', '100');
+  
+  const res = await api(`${API}/plans?${params}`);
+  calendarPlans = res.success ? res.plans : [];
+  renderCalendar();
+}
+
+function renderCalendar() {
+  const year = currentCalendarDate.getFullYear();
+  const month = currentCalendarDate.getMonth();
+  
+  document.getElementById('calendarTitle').textContent = `${year}年${month + 1}月`;
+  
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const startDay = firstDay.getDay();
+  const daysInMonth = lastDay.getDate();
+  
+  const prevMonthLastDay = new Date(year, month, 0).getDate();
+  
+  const grid = document.getElementById('calendarGrid');
+  let html = '';
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  for (let i = 0; i < 42; i++) {
+    let dayNum;
+    let isOtherMonth = false;
+    let dateObj;
+    
+    if (i < startDay) {
+      dayNum = prevMonthLastDay - startDay + i + 1;
+      isOtherMonth = true;
+      dateObj = new Date(year, month - 1, dayNum);
+    } else if (i >= startDay + daysInMonth) {
+      dayNum = i - startDay - daysInMonth + 1;
+      isOtherMonth = true;
+      dateObj = new Date(year, month + 1, dayNum);
+    } else {
+      dayNum = i - startDay + 1;
+      dateObj = new Date(year, month, dayNum);
+    }
+    
+    const dateStr = formatDateKey(dateObj);
+    const dayPlans = getPlansForDate(dateObj);
+    const hasActivity = dayPlans.length > 0;
+    const hasJoined = dayPlans.some(p => isUserJoinedPlan(p));
+    const isToday = dateObj.getTime() === today.getTime();
+    
+    let dayClass = 'calendar-day';
+    if (isOtherMonth) dayClass += ' other-month';
+    if (isToday) dayClass += ' today';
+    if (hasActivity) dayClass += ' has-activity';
+    if (hasJoined) dayClass += ' joined-activity';
+    
+    let dotsHtml = '';
+    if (hasActivity) {
+      const joinedCount = dayPlans.filter(p => isUserJoinedPlan(p)).length;
+      const otherCount = dayPlans.length - joinedCount;
+      dotsHtml = '<div class="day-dots">';
+      if (joinedCount > 0) {
+        dotsHtml += `<span class="day-dot joined" title="已加入${joinedCount}个活动"></span>`;
+      }
+      if (otherCount > 0) {
+        dotsHtml += `<span class="day-dot" title="${otherCount}个可参加活动"></span>`;
+      }
+      dotsHtml += '</div>';
+    }
+    
+    html += `
+      <div class="${dayClass}" data-date="${dateStr}" onclick="handleDateClick('${dateStr}')">
+        <span class="day-number">${dayNum}</span>
+        ${dotsHtml}
+      </div>
+    `;
+  }
+  
+  grid.innerHTML = html;
+}
+
+function formatDateKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getPlansForDate(date) {
+  const dateStr = formatDateKey(date);
+  return calendarPlans.filter(plan => {
+    const planDate = formatDateKey(new Date(plan.start_time));
+    return planDate === dateStr;
+  });
+}
+
+function isUserJoinedPlan(plan) {
+  if (!currentUser) return false;
+  return plan.participants?.some(p => p.id === currentUser.id);
+}
+
+function prevMonth() {
+  currentCalendarDate.setMonth(currentCalendarDate.getMonth() - 1);
+  renderCalendar();
+}
+
+function nextMonth() {
+  currentCalendarDate.setMonth(currentCalendarDate.getMonth() + 1);
+  renderCalendar();
+}
+
+function goToToday() {
+  currentCalendarDate = new Date();
+  renderCalendar();
+}
+
+function handleDateClick(dateStr) {
+  const date = new Date(dateStr);
+  selectedDatePlans = getPlansForDate(date);
+  
+  const title = document.getElementById('dateActivityTitle');
+  title.textContent = `${date.getMonth() + 1}月${date.getDate()}日 活动`;
+  
+  currentDateTab = 'recruiting';
+  updateDateTabs();
+  renderDateActivityList();
+  
+  openModal('dateActivityModal');
+}
+
+function updateDateTabs() {
+  document.querySelectorAll('.date-tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === currentDateTab);
+  });
+}
+
+function renderDateActivityList() {
+  const list = document.getElementById('dateActivityList');
+  let plans = [];
+  
+  const now = new Date();
+  
+  if (currentDateTab === 'recruiting') {
+    plans = selectedDatePlans.filter(p => p.status === 'recruiting');
+  } else {
+    plans = selectedDatePlans.filter(p => {
+      const startTime = new Date(p.start_time);
+      const diffHours = (startTime - now) / (1000 * 60 * 60);
+      return diffHours > 0 && diffHours <= 48 && p.status === 'recruiting';
+    });
+  }
+  
+  plans.sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+  
+  if (plans.length === 0) {
+    list.innerHTML = `
+      <div class="date-empty-state">
+        <div class="empty-icon">📅</div>
+        <p>${currentDateTab === 'recruiting' ? '当天暂无招募中的活动' : '当天暂无即将开始的活动'}</p>
+      </div>
+    `;
+    return;
+  }
+  
+  list.innerHTML = plans.map(plan => {
+    const theme = getThemeInfo(plan.theme);
+    const status = getStatusLabel(plan.status);
+    const startTime = new Date(plan.start_time);
+    const timeStr = `${String(startTime.getHours()).padStart(2, '0')}:${String(startTime.getMinutes()).padStart(2, '0')}`;
+    const isJoined = isUserJoinedPlan(plan);
+    const isFull = plan.current_participants >= plan.max_participants;
+    
+    return `
+      <div class="date-activity-item" data-plan-id="${plan.id}" onclick="openPlanDetail(${plan.id})">
+        <div class="date-activity-time">
+          <div class="time">${timeStr}</div>
+          <div class="duration">${plan.duration_hours}小时</div>
+        </div>
+        <div class="date-activity-info">
+          <div class="date-activity-theme" style="background: ${theme.color}15; color: ${theme.color}">
+            <span>${theme.icon}</span>
+            <span>${theme.name}</span>
+          </div>
+          <div class="date-activity-title">${plan.title}</div>
+          <div class="date-activity-meta">
+            <span>📍 ${plan.city}</span>
+            <span>👥 ${plan.current_participants}/${plan.max_participants}人</span>
+            ${isJoined ? '<span style="color: var(--success);">✓ 已加入</span>' : ''}
+            ${isFull && !isJoined ? '<span style="color: var(--danger);">已满</span>' : ''}
+          </div>
+        </div>
+        <div class="date-activity-status">
+          <span class="status-badge ${status.cls}">${status.text}</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function initCalendarEvents() {
+  document.getElementById('prevMonthBtn').addEventListener('click', prevMonth);
+  document.getElementById('nextMonthBtn').addEventListener('click', nextMonth);
+  document.getElementById('todayBtn').addEventListener('click', goToToday);
+  
+  document.querySelectorAll('.view-toggle-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchView(btn.dataset.view));
+  });
+  
+  document.getElementById('closeDateActivityBtn').addEventListener('click', () => {
+    closeModal('dateActivityModal');
+  });
+  
+  document.getElementById('dateActivityModal').addEventListener('click', (e) => {
+    if (e.target.id === 'dateActivityModal') closeModal('dateActivityModal');
+  });
+  
+  document.querySelectorAll('.date-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentDateTab = btn.dataset.tab;
+      updateDateTabs();
+      renderDateActivityList();
+    });
+  });
 }
 
 async function loadMatchSuggestions() {
@@ -2714,6 +2975,7 @@ async function init() {
   document.getElementById('editTemplateModal').classList.add('hidden');
   document.getElementById('userProfileModal').classList.add('hidden');
   document.getElementById('followListModal').classList.add('hidden');
+  document.getElementById('dateActivityModal').classList.add('hidden');
   document.getElementById('toast').classList.add('hidden');
   
   initEventListeners();
@@ -2721,6 +2983,7 @@ async function init() {
   initCreatePlanForm();
   initRatingModalEvents();
   initFollowModalEvents();
+  initCalendarEvents();
   
   const savedUser = loadUser();
   if (savedUser) {

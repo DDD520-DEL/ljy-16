@@ -126,8 +126,59 @@
             <div class="filter-group search-group">
               <input type="text" id="searchKeyword" placeholder="🔍 搜索路线标题或描述">
             </div>
+            <div class="filter-group view-toggle-group">
+              <div class="view-toggle">
+                <button class="view-toggle-btn active" data-view="list">
+                  <span>☰</span> 列表
+                </button>
+                <button class="view-toggle-btn" data-view="calendar">
+                  <span>📅</span> 日历
+                </button>
+              </div>
+            </div>
           </div>
           <div class="plans-grid" id="discoverPlans"></div>
+          <div class="calendar-view hidden" id="calendarView">
+            <div class="calendar-header">
+              <button class="calendar-nav-btn" id="prevMonthBtn">‹</button>
+              <div class="calendar-title" id="calendarTitle">2024年1月</div>
+              <button class="calendar-nav-btn" id="nextMonthBtn">›</button>
+              <button class="btn btn-outline btn-sm" id="todayBtn">今天</button>
+            </div>
+            <div class="calendar-weekdays">
+              <div class="weekday">日</div>
+              <div class="weekday">一</div>
+              <div class="weekday">二</div>
+              <div class="weekday">三</div>
+              <div class="weekday">四</div>
+              <div class="weekday">五</div>
+              <div class="weekday">六</div>
+            </div>
+            <div class="calendar-grid" id="calendarGrid"></div>
+            <div class="calendar-legend">
+              <div class="legend-item">
+                <span class="legend-dot dot-activity"></span>
+                <span>有活动</span>
+              </div>
+              <div class="legend-item">
+                <span class="legend-dot dot-joined"></span>
+                <span>已加入</span>
+              </div>
+            </div>
+          </div>
+          <div id="dateActivityModal" class="modal">
+            <div class="modal-content date-activity-modal">
+              <div class="modal-header">
+                <h2 id="dateActivityTitle">6月16日 活动</h2>
+                <button class="close-btn" id="closeDateActivityBtn">×</button>
+              </div>
+              <div class="date-activity-tabs">
+                <button class="date-tab-btn active" data-tab="recruiting">招募中</button>
+                <button class="date-tab-btn" data-tab="upcoming">即将开始</button>
+              </div>
+              <div id="dateActivityList" class="date-activity-list"></div>
+            </div>
+          </div>
         </section>
 
         <section id="matchTab" class="tab-content">
