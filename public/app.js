@@ -734,8 +734,8 @@ async function loadMyPlans() {
   document.getElementById('profileBio').textContent = currentUser.bio || '这个人很懒，没有留下签名';
   document.getElementById('profileCity').textContent = '📍 ' + (currentUser.city || '未知城市');
   document.getElementById('statPlans').textContent = res.success ? res.plans.length : 0;
-  document.getElementById('statCheckins').textContent = checkinStats ? checkinStats.total_checkins : 0;
-  document.getElementById('statConsecutive').textContent = checkinStats ? checkinStats.consecutive_days : 0;
+  document.getElementById('statCheckins').textContent = checkinStats ? checkinStats.stats.total_checkins : 0;
+  document.getElementById('statConsecutive').textContent = checkinStats ? checkinStats.stats.consecutive_days : 0;
   document.getElementById('statPhotos').textContent = photosStats ? photosStats.photos_count : 0;
   document.getElementById('statFavorites').textContent = favRes.success ? favRes.favorites.length : 0;
   
@@ -2576,7 +2576,8 @@ function getFeedTypeLabel(type) {
     create_plan: { text: '发布了新计划', icon: '📅', cls: 'create_plan' },
     join_plan: { text: '加入了活动', icon: '🤝', cls: 'join_plan' },
     complete_citywalk: { text: '完成了Citywalk', icon: '✅', cls: 'complete_citywalk' },
-    create_note: { text: '写了笔记', icon: '📝', cls: 'create_note' }
+    create_note: { text: '写了笔记', icon: '📝', cls: 'create_note' },
+    checkin: { text: '完成了签到', icon: '✓', cls: 'checkin' }
   };
   return labels[type] || { text: type, icon: '📌', cls: '' };
 }
