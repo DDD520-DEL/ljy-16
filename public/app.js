@@ -723,6 +723,9 @@ async function loadMyPlans() {
   const photosStatsRes = await api(`${API}/users/${currentUser.id}/photos-stats`);
   const photosStats = photosStatsRes.success ? photosStatsRes.stats : null;
   
+  const checkinStatsRes = await api(`${API}/users/${currentUser.id}/checkin-stats`);
+  const checkinStats = checkinStatsRes.success ? checkinStatsRes : null;
+  
   const res = await api(`${API}/users/${currentUser.id}/plans`);
   const grid = document.getElementById('myPlansGrid');
   
@@ -731,6 +734,8 @@ async function loadMyPlans() {
   document.getElementById('profileBio').textContent = currentUser.bio || '这个人很懒，没有留下签名';
   document.getElementById('profileCity').textContent = '📍 ' + (currentUser.city || '未知城市');
   document.getElementById('statPlans').textContent = res.success ? res.plans.length : 0;
+  document.getElementById('statCheckins').textContent = checkinStats ? checkinStats.total_checkins : 0;
+  document.getElementById('statConsecutive').textContent = checkinStats ? checkinStats.consecutive_days : 0;
   document.getElementById('statPhotos').textContent = photosStats ? photosStats.photos_count : 0;
   document.getElementById('statFavorites').textContent = favRes.success ? favRes.favorites.length : 0;
   
@@ -939,13 +944,31 @@ async function openPlanDetail(planId) {
   const canEdit = isCreator && plan.status === 'recruiting' && new Date(plan.start_time) > new Date();
   const canCancel = isCreator && plan.status === 'recruiting' && new Date(plan.start_time) > new Date();
 
+  const now = new Date();
+  const startTime = new Date(plan.start_time);
+  const diffMinutes = (now - startTime) / (1000 * 60);
+  const canCheckin = isJoined && diffMinutes >= -30 && diffMinutes <= 30 && plan.status !== 'cancelled';
+  const myParticipant = plan.participants?.find(p => p.id === currentUser?.id);
+  const hasCheckedIn = myParticipant?.is_checked_in || false;
+  const checkinTimeBefore = new Date(startTime.getTime() - 30 * 60 * 1000);
+  const checkinTimeAfter = new Date(startTime.getTime() + 30 * 60 * 1000);
+  const formatCheckinTime = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const checkinWindowText = `${formatCheckinTime(checkinTimeBefore)} - ${formatCheckinTime(checkinTimeAfter)}`;
+
   const participantsHtml = (plan.participants || []).map(p => {
     const isMe = currentUser && Number(p.id) === Number(currentUser.id);
+    const checkedInBadge = p.is_checked_in ? '<span class="checked-in-badge" title="已签到">✓</span>' : '';
     return `
     <div class="participant-item" data-user-id="${p.id}">
-      <div class="participant-item-avatar">${p.avatar || '👤'}</div>
+      <div class="participant-item-avatar ${p.is_checked_in ? 'avatar-checked-in' : ''}">
+        ${p.avatar || '👤'}
+        ${checkedInBadge}
+      </div>
       <div class="participant-item-info">
-        <span class="participant-item-name">${p.username}</span>
+        <span class="participant-item-name">
+          ${p.username}
+          ${p.is_checked_in ? '<span class="checked-in-label">已签到</span>' : ''}
+        </span>
         <span class="participant-item-role ${p.role === 'creator' ? 'creator' : ''}">
           ${p.role === 'creator' ? '🌟 创建者' : '成员'}
         </span>
@@ -1119,6 +1142,33 @@ async function openPlanDetail(planId) {
         </div>
       ` : ''}
 
+      ${isCreator || isJoined ? `
+        <div class="detail-section checkin-section">
+          <h3>✅ 活动签到</h3>
+          <div class="checkin-info">
+            <div class="checkin-window">
+              <span class="checkin-icon">⏰</span>
+              <span>签到时间：${checkinWindowText}（活动开始前后30分钟内）</span>
+            </div>
+            <div class="checkin-stats">
+              <span class="checkin-stat-item">
+                <span class="checkin-stat-num checked">${plan.participants?.filter(p => p.is_checked_in).length || 0}</span>
+                <span class="checkin-stat-label">已签到</span>
+              </span>
+              <span class="checkin-stat-item">
+                <span class="checkin-stat-num pending">${plan.participants?.filter(p => !p.is_checked_in).length || 0}</span>
+                <span class="checkin-stat-label">未签到</span>
+              </span>
+            </div>
+          </div>
+          ${isCreator ? `
+            <button class="btn btn-outline" onclick="openCheckinManager(${plan.id})">
+              👥 查看签到详情
+            </button>
+          ` : ''}
+        </div>
+      ` : ''}
+
       <div class="detail-section">
         <h3>👥 参与搭子 (${plan.participants?.length || 0})</h3>
         <div class="participants-list">${participantsHtml}</div>
@@ -1185,19 +1235,22 @@ async function openPlanDetail(planId) {
       <div class="detail-actions">
         ${plan.status === 'recruiting' ? (
           isJoined ? `
+            ${canCheckin && !hasCheckedIn ? `<button class="btn btn-primary btn-checkin" onclick="checkinPlan(${plan.id})">✅ 立即签到</button>` : ''}
+            ${hasCheckedIn ? `<button class="btn btn-outline" disabled>✓ 已签到</button>` : ''}
+            ${!canCheckin && isJoined && !hasCheckedIn && plan.status !== 'completed' ? `<button class="btn btn-outline" disabled title="签到时间：${checkinWindowText}">⏰ ${diffMinutes < -30 ? '签到未开始' : '签到已结束'}</button>` : ''}
             ${!isCreator ? `<button class="btn btn-outline" onclick="leavePlan(${plan.id})">🚪 退出计划</button>` : ''}
             ${isCreator ? `
               <button class="btn btn-outline" onclick="openEditPlanModal(${plan.id})">✏️ 编辑计划</button>
               <button class="btn btn-outline" style="color: var(--danger); border-color: var(--danger);" onclick="openCancelPlanModal(${plan.id})">🚫 取消活动</button>
               <button class="btn btn-primary" onclick="completePlan(${plan.id})">✅ 标记完成</button>
-            ` : 
-              `<button class="btn btn-outline" disabled>✓ 已加入</button>`}
+            ` : ''}
           ` : (
             isFull ? 
               `<button class="btn btn-outline" disabled>👥 人数已满</button>` :
               `<button class="btn btn-primary" onclick="joinPlan(${plan.id})">🤝 加入计划</button>`
           )
         ) : ''}
+        ${plan.status === 'completed' && hasCheckedIn ? `<button class="btn btn-outline" disabled>✓ 已签到</button>` : ''}
         ${isCancelled ? `<button class="btn btn-outline" disabled>🚫 已取消</button>` : ''}
         <button class="btn btn-outline" onclick="closeDetailModal()">关闭</button>
       </div>
@@ -1277,6 +1330,108 @@ async function completePlan(planId) {
   } else {
     showToast(res.error || '操作失败', 'error');
   }
+}
+
+async function checkinPlan(planId) {
+  if (!currentUser) return;
+  const res = await api(`${API}/plans/${planId}/checkin`, {
+    method: 'POST',
+    body: JSON.stringify({ user_id: currentUser.id })
+  });
+  if (res.success) {
+    showToast('签到成功！🎉 祝你Citywalk愉快~', 'success');
+    if (currentDetailPlanId === planId) {
+      openPlanDetail(planId);
+    }
+  } else {
+    showToast(res.error || '签到失败', 'error');
+  }
+}
+
+let currentCheckinTab = 'checked_in';
+
+async function openCheckinManager(planId) {
+  const res = await api(`${API}/plans/${planId}/checkins`);
+  if (!res.success) {
+    showToast('加载签到信息失败', 'error');
+    return;
+  }
+
+  const data = res;
+  const plan = currentDetailPlan;
+
+  const renderList = (list, checkedIn) => {
+    if (list.length === 0) {
+      return `
+        <div class="empty-state" style="padding: 30px;">
+          <div class="empty-state-icon" style="font-size: 48px;">${checkedIn ? '✅' : '⏳'}</div>
+          <h3>${checkedIn ? '暂无已签到人员' : '所有人都已签到'}</h3>
+        </div>
+      `;
+    }
+    return list.map(p => `
+      <div class="checkin-list-item">
+        <div class="checkin-item-avatar ${p.checkin_time ? 'avatar-checked-in' : ''}">
+          ${p.avatar || '👤'}
+          ${p.checkin_time ? '<span class="checked-in-badge" title="已签到">✓</span>' : ''}
+        </div>
+        <div class="checkin-item-info">
+          <span class="checkin-item-name">
+            ${p.username}
+            ${p.role === 'creator' ? '<span class="participant-item-role creator">🌟 创建者</span>' : ''}
+          </span>
+          ${p.checkin_time ? `
+            <span class="checkin-item-time">
+              🕐 ${new Date(p.checkin_time).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          ` : `
+            <span class="checkin-item-time pending">
+              ⏳ 待签到
+            </span>
+          `}
+        </div>
+      </div>
+    `).join('');
+  };
+
+  const content = `
+    <div class="checkin-manager">
+      <div class="checkin-manager-header">
+        <h3>✅ 签到管理 - ${plan?.title || '活动'}</h3>
+        <div class="checkin-manager-stats">
+          <span>已签到: <strong>${data.stats.checked_in_count}</strong></span>
+          <span>未签到: <strong>${data.stats.not_checked_in_count}</strong></span>
+          <span>总计: <strong>${data.stats.total}</strong></span>
+        </div>
+      </div>
+      <div class="checkin-manager-tabs">
+        <div class="checkin-tab ${currentCheckinTab === 'checked_in' ? 'active' : ''}" onclick="switchCheckinTab('checked_in', ${planId})">
+          ✅ 已签到 (${data.stats.checked_in_count})
+        </div>
+        <div class="checkin-tab ${currentCheckinTab === 'not_checked_in' ? 'active' : ''}" onclick="switchCheckinTab('not_checked_in', ${planId})">
+          ⏳ 未签到 (${data.stats.not_checked_in_count})
+        </div>
+      </div>
+      <div class="checkin-manager-content">
+        ${currentCheckinTab === 'checked_in' ? renderList(data.checked_in, true) : renderList(data.not_checked_in, false)}
+      </div>
+      <div class="checkin-manager-footer">
+        <button class="btn btn-outline" onclick="closeCheckinManager()">关闭</button>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('checkinManagerContent').innerHTML = content;
+  document.getElementById('checkinManagerModal').classList.remove('hidden');
+}
+
+function switchCheckinTab(tab, planId) {
+  currentCheckinTab = tab;
+  openCheckinManager(planId);
+}
+
+function closeCheckinManager() {
+  document.getElementById('checkinManagerModal').classList.add('hidden');
 }
 
 function closeDetailModal() {

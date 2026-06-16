@@ -175,6 +175,13 @@ app.get('/api/plans', (req, res) => {
         avatar: p.avatar || p.u_avatar,
         role: p.role
       }));
+
+      const checkins = db.prepare('SELECT user_id FROM plan_checkins WHERE plan_id = ?').all(plan.id);
+      const checkinIds = new Set(checkins.map(c => c.user_id));
+      participants.forEach(p => {
+        p.is_checked_in = checkinIds.has(p.id);
+      });
+
       plan.participants = participants;
 
       const isFollowedCreator = followedIds.has(String(plan.creator_id)) || followedIds.has(Number(plan.creator_id));
@@ -232,6 +239,14 @@ app.get('/api/plans/:id', (req, res) => {
       role: p.role,
       joined_at: p.joined_at
     }));
+
+    const checkins = db.prepare('SELECT user_id, checkin_time FROM plan_checkins WHERE plan_id = ?').all(plan.id);
+    const checkinMap = new Map(checkins.map(c => [c.user_id, c.checkin_time]));
+    participants.forEach(p => {
+      p.is_checked_in = checkinMap.has(p.id);
+      p.checkin_time = checkinMap.get(p.id) || null;
+    });
+
     plan.participants = participants;
 
     const notes = db.prepare(`
@@ -825,6 +840,13 @@ app.get('/api/match/suggestions', (req, res) => {
         avatar: p.avatar || p.u_avatar,
         role: p.role
       }));
+
+      const checkins = db.prepare('SELECT user_id FROM plan_checkins WHERE plan_id = ?').all(s.id);
+      const checkinIds = new Set(checkins.map(c => c.user_id));
+      participants.forEach(p => {
+        p.is_checked_in = checkinIds.has(p.id);
+      });
+
       s.participants = participants;
 
       const isFollowedCreator = followedIds.has(String(s.creator_id)) || followedIds.has(Number(s.creator_id));
@@ -1361,6 +1383,13 @@ app.get('/api/users/:id/plans', (req, res) => {
         avatar: x.avatar || x.u_avatar,
         role: x.role
       }));
+
+      const checkins = db.prepare('SELECT user_id FROM plan_checkins WHERE plan_id = ?').all(planId);
+      const checkinIds = new Set(checkins.map(c => c.user_id));
+      participants.forEach(x => {
+        x.is_checked_in = checkinIds.has(x.id);
+      });
+
       p.participants = participants;
       delete p.creator_name;
       delete p.creator_avatar;
@@ -1901,6 +1930,13 @@ app.get('/api/users/:id/recommendations', (req, res) => {
         avatar: p.avatar || p.u_avatar,
         role: p.role
       }));
+
+      const checkins = db.prepare('SELECT user_id FROM plan_checkins WHERE plan_id = ?').all(r.id);
+      const checkinIds = new Set(checkins.map(c => c.user_id));
+      participants.forEach(p => {
+        p.is_checked_in = checkinIds.has(p.id);
+      });
+
       r.participants = participants;
       delete r.creator_name;
       delete r.creator_avatar;
@@ -2828,6 +2864,227 @@ app.get('/api/weather', (req, res) => {
   }).on('error', () => {
     res.json({ success: false, error: '天气服务暂不可用' });
   });
+});
+
+app.post('/api/plans/:id/checkin', (req, res) => {
+  try {
+    const planId = req.params.id;
+    const { user_id } = req.body;
+
+    if (!user_id) {
+      return res.status(400).json({ error: '缺少用户ID' });
+    }
+
+    const plan = db.prepare('SELECT * FROM citywalk_plans WHERE id = ?').get(planId);
+    if (!plan) {
+      return res.status(404).json({ error: '计划不存在' });
+    }
+
+    const participant = db.prepare('SELECT * FROM plan_participants WHERE plan_id = ? AND user_id = ?').get(planId, user_id);
+    if (!participant) {
+      return res.status(403).json({ error: '只有已加入的参与者才能签到' });
+    }
+
+    const existingCheckin = db.prepare('SELECT * FROM plan_checkins WHERE plan_id = ? AND user_id = ?').get(planId, user_id);
+    if (existingCheckin) {
+      return res.status(400).json({ error: '您已经签到过了' });
+    }
+
+    const now = new Date();
+    const startTime = new Date(plan.start_time);
+    const diffMinutes = (now - startTime) / (1000 * 60);
+
+    if (diffMinutes < -30) {
+      return res.status(400).json({ error: '签到尚未开始，请在活动开始前30分钟内签到' });
+    }
+    if (diffMinutes > 30) {
+      return res.status(400).json({ error: '签到已结束，只能在活动开始后30分钟内签到' });
+    }
+
+    const stmt = db.prepare(`
+      INSERT INTO plan_checkins (plan_id, user_id, checkin_time)
+      VALUES (?, ?, CURRENT_TIMESTAMP)
+    `);
+    const result = stmt.run(planId, user_id);
+
+    const checkin = db.prepare(`
+      SELECT ck.*, u.username, u.avatar
+      FROM plan_checkins ck
+      LEFT JOIN users u ON ck.user_id = u.id
+      WHERE ck.id = ?
+    `).get(result.lastInsertRowid);
+
+    createFeed(user_id, 'checkin', planId, 'plan', {
+      title: plan.title,
+      city: plan.city,
+      theme: plan.theme
+    });
+
+    res.json({ 
+      success: true, 
+      checkin: {
+        id: checkin.id,
+        plan_id: checkin.plan_id,
+        user_id: checkin.user_id,
+        checkin_time: checkin.checkin_time,
+        user: {
+          id: checkin.user_id,
+          username: checkin.username || checkin.u_username,
+          avatar: checkin.avatar || checkin.u_avatar
+        }
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/plans/:id/checkins', (req, res) => {
+  try {
+    const planId = req.params.id;
+
+    const plan = db.prepare('SELECT * FROM citywalk_plans WHERE id = ?').get(planId);
+    if (!plan) {
+      return res.status(404).json({ error: '计划不存在' });
+    }
+
+    const checkins = db.prepare(`
+      SELECT ck.*, u.username, u.avatar
+      FROM plan_checkins ck
+      LEFT JOIN users u ON ck.user_id = u.id
+      WHERE ck.plan_id = ?
+      ORDER BY ck.checkin_time ASC
+    `).all(planId).map(c => ({
+      id: c.id,
+      plan_id: c.plan_id,
+      user_id: c.user_id,
+      checkin_time: c.checkin_time,
+      user: {
+        id: c.user_id,
+        username: c.username || c.u_username,
+        avatar: c.avatar || c.u_avatar
+      }
+    }));
+
+    const checkedInUserIds = new Set(checkins.map(c => c.user_id));
+
+    const allParticipants = db.prepare(`
+      SELECT pp.user_id, pp.role, pp.joined_at, u.username, u.avatar
+      FROM plan_participants pp
+      LEFT JOIN users u ON pp.user_id = u.id
+      WHERE pp.plan_id = ?
+    `).all(planId);
+
+    const checkedIn = allParticipants
+      .filter(p => checkedInUserIds.has(p.user_id))
+      .map(p => ({
+        id: p.user_id,
+        username: p.username || p.u_username,
+        avatar: p.avatar || p.u_avatar,
+        role: p.role,
+        joined_at: p.joined_at,
+        checkin_time: checkins.find(c => c.user_id === p.user_id)?.checkin_time
+      }));
+
+    const notCheckedIn = allParticipants
+      .filter(p => !checkedInUserIds.has(p.user_id))
+      .map(p => ({
+        id: p.user_id,
+        username: p.username || p.u_username,
+        avatar: p.avatar || p.u_avatar,
+        role: p.role,
+        joined_at: p.joined_at
+      }));
+
+    const now = new Date();
+    const startTime = new Date(plan.start_time);
+    const diffMinutes = (now - startTime) / (1000 * 60);
+    const canCheckin = diffMinutes >= -30 && diffMinutes <= 30;
+
+    res.json({
+      success: true,
+      checkins,
+      checked_in: checkedIn,
+      not_checked_in: notCheckedIn,
+      can_checkin: canCheckin,
+      stats: {
+        total: allParticipants.length,
+        checked_in_count: checkedIn.length,
+        not_checked_in_count: notCheckedIn.length
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/users/:id/checkin-stats', (req, res) => {
+  try {
+    const userId = req.params.id;
+
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+    if (!user) {
+      return res.status(404).json({ error: '用户不存在' });
+    }
+
+    const checkins = db.prepare(`
+      SELECT ck.*, p.start_time, p.title, p.city
+      FROM plan_checkins ck
+      LEFT JOIN citywalk_plans p ON ck.plan_id = p.id
+      WHERE ck.user_id = ?
+      ORDER BY ck.checkin_time DESC
+    `).all(userId);
+
+    const totalCheckins = checkins.length;
+
+    let consecutiveDays = 0;
+    if (totalCheckins > 0) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const checkinDates = new Set();
+      checkins.forEach(c => {
+        const date = new Date(c.checkin_time);
+        date.setHours(0, 0, 0, 0);
+        checkinDates.add(date.getTime());
+      });
+
+      let currentDate = new Date(today);
+      while (checkinDates.has(currentDate.getTime())) {
+        consecutiveDays++;
+        currentDate.setDate(currentDate.getDate() - 1);
+      }
+
+      if (consecutiveDays === 0) {
+        currentDate = new Date(today);
+        currentDate.setDate(currentDate.getDate() - 1);
+        while (checkinDates.has(currentDate.getTime())) {
+          consecutiveDays++;
+          currentDate.setDate(currentDate.getDate() - 1);
+        }
+      }
+    }
+
+    const recentCheckins = checkins.slice(0, 10).map(c => ({
+      id: c.id,
+      plan_id: c.plan_id,
+      checkin_time: c.checkin_time,
+      plan_title: c.title,
+      plan_city: c.city,
+      plan_start_time: c.start_time
+    }));
+
+    res.json({
+      success: true,
+      stats: {
+        total_checkins: totalCheckins,
+        consecutive_days: consecutiveDays
+      },
+      recent_checkins: recentCheckins
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.listen(PORT, () => {

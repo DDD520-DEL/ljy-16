@@ -249,6 +249,14 @@
                 <div class="stat-label">参与计划</div>
               </div>
               <div class="stat-item">
+                <div class="stat-num" id="statCheckins">0</div>
+                <div class="stat-label">累计签到</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-num" id="statConsecutive">0</div>
+                <div class="stat-label">连续签到</div>
+              </div>
+              <div class="stat-item">
                 <div class="stat-num" id="statPhotos">0</div>
                 <div class="stat-label">上传照片</div>
               </div>
@@ -857,6 +865,16 @@
           <button class="close-btn" id="closeFollowListBtn">×</button>
         </div>
         <div id="followListContent" class="follow-list-container"></div>
+      </div>
+    </div>
+
+    <div id="checkinManagerModal" class="modal">
+      <div class="modal-content checkin-manager-modal" style="max-width: 520px;">
+        <div class="modal-header">
+          <h2>✅ 签到管理</h2>
+          <button class="close-btn" onclick="closeCheckinManager()">×</button>
+        </div>
+        <div id="checkinManagerContent"></div>
       </div>
     </div>
   </div>
