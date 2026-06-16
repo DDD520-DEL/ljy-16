@@ -111,6 +111,11 @@ app.post('/api/plans', (req, res) => {
       theme: plan.theme
     });
 
+    const newBadges = checkAndUnlockBadges(creator_id);
+    if (newBadges.length > 0) {
+      plan.new_badges = newBadges;
+    }
+
     res.json({ success: true, plan });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -368,6 +373,11 @@ app.post('/api/plans/:id/join', (req, res) => {
       city: updated.city,
       theme: updated.theme
     });
+
+    const newBadges = checkAndUnlockBadges(user_id);
+    if (newBadges.length > 0) {
+      updated.new_badges = newBadges;
+    }
 
     res.json({ success: true, plan: updated });
   } catch (err) {
@@ -1006,6 +1016,11 @@ app.post('/api/notes', (req, res) => {
       plan_id: plan_id
     });
 
+    const newBadges = checkAndUnlockBadges(author_id);
+    if (newBadges.length > 0) {
+      note.new_badges = newBadges;
+    }
+
     res.json({ success: true, note });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1143,6 +1158,11 @@ app.post('/api/notes/:id/comments', (req, res) => {
       comment.author_avatar = comment.author_avatar || comment.u_avatar;
       comment.reply_to_name = comment.reply_to_name || comment.ru_username;
       comment.reply_to_avatar = comment.reply_to_avatar || comment.ru_avatar;
+    }
+
+    const newBadges = checkAndUnlockBadges(author_id);
+    if (newBadges.length > 0) {
+      comment.new_badges = newBadges;
     }
 
     res.json({ success: true, comment });
@@ -1316,7 +1336,9 @@ app.post('/api/favorites', (req, res) => {
     }
     const stmt = db.prepare('INSERT OR IGNORE INTO favorite_routes (user_id, plan_id) VALUES (?, ?)');
     stmt.run(user_id, plan_id);
-    res.json({ success: true });
+
+    const newBadges = checkAndUnlockBadges(user_id);
+    res.json({ success: true, new_badges: newBadges });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1471,7 +1493,17 @@ app.post('/api/follows', (req, res) => {
     }
     const stmt = db.prepare('INSERT OR IGNORE INTO user_follows (follower_id, following_id) VALUES (?, ?)');
     stmt.run(follower_id, following_id);
-    res.json({ success: true });
+
+    const followerNewBadges = checkAndUnlockBadges(follower_id);
+    const followingNewBadges = checkAndUnlockBadges(following_id);
+
+    res.json({ 
+      success: true, 
+      new_badges: {
+        follower: followerNewBadges,
+        following: followingNewBadges
+      }
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -2022,6 +2054,11 @@ app.post('/api/photos', (req, res) => {
       plan_id: plan_id,
       plan_title: plan.title
     });
+
+    const newBadges = checkAndUnlockBadges(user_id);
+    if (newBadges.length > 0) {
+      photo.new_badges = newBadges;
+    }
 
     res.json({ success: true, photo });
   } catch (err) {
@@ -2920,6 +2957,8 @@ app.post('/api/plans/:id/checkin', (req, res) => {
       theme: plan.theme
     });
 
+    const newBadges = checkAndUnlockBadges(user_id);
+
     res.json({ 
       success: true, 
       checkin: {
@@ -2932,7 +2971,8 @@ app.post('/api/plans/:id/checkin', (req, res) => {
           username: checkin.username || checkin.u_username,
           avatar: checkin.avatar || checkin.u_avatar
         }
-      }
+      },
+      new_badges: newBadges
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -3086,6 +3126,213 @@ app.get('/api/users/:id/checkin-stats', (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+function calculateUserStats(userId) {
+  const stats = {};
+
+  const createdPlans = db.prepare('SELECT COUNT(*) as count FROM citywalk_plans WHERE creator_id = ?').get(userId);
+  stats.created_plans = createdPlans ? Object.values(createdPlans)[0] : 0;
+
+  const joinedPlans = db.prepare('SELECT COUNT(*) as count FROM plan_participants WHERE user_id = ? AND role != "creator"').get(userId);
+  stats.joined_plans = joinedPlans ? Object.values(joinedPlans)[0] : 0;
+
+  const notesCount = db.prepare('SELECT COUNT(*) as count FROM route_notes WHERE author_id = ?').get(userId);
+  stats.notes_count = notesCount ? Object.values(notesCount)[0] : 0;
+
+  const followingCount = db.prepare('SELECT COUNT(*) as count FROM user_follows WHERE follower_id = ?').get(userId);
+  stats.following_count = followingCount ? Object.values(followingCount)[0] : 0;
+
+  const followersCount = db.prepare('SELECT COUNT(*) as count FROM user_follows WHERE following_id = ?').get(userId);
+  stats.followers_count = followersCount ? Object.values(followersCount)[0] : 0;
+
+  const favoritesCount = db.prepare('SELECT COUNT(*) as count FROM favorite_routes WHERE user_id = ?').get(userId);
+  stats.favorites_count = favoritesCount ? Object.values(favoritesCount)[0] : 0;
+
+  const photosCount = db.prepare('SELECT COUNT(*) as count FROM activity_photos WHERE user_id = ?').get(userId);
+  stats.photos_count = photosCount ? Object.values(photosCount)[0] : 0;
+
+  const commentsCount = db.prepare('SELECT COUNT(*) as count FROM note_comments WHERE author_id = ?').get(userId);
+  stats.comments_count = commentsCount ? Object.values(commentsCount)[0] : 0;
+
+  const checkinsCount = db.prepare('SELECT COUNT(*) as count FROM plan_checkins WHERE user_id = ?').get(userId);
+  stats.checkins_count = checkinsCount ? Object.values(checkinsCount)[0] : 0;
+
+  const uniqueCitiesResult = db.prepare(`
+    SELECT DISTINCT p.city 
+    FROM plan_participants pp
+    LEFT JOIN citywalk_plans p ON pp.plan_id = p.id
+    WHERE pp.user_id = ? AND p.city IS NOT NULL AND p.city != ''
+  `).all(userId);
+  stats.unique_cities = uniqueCitiesResult ? uniqueCitiesResult.length : 0;
+
+  const checkins = db.prepare('SELECT * FROM plan_checkins WHERE user_id = ? ORDER BY checkin_time DESC').all(userId);
+  let consecutiveDays = 0;
+  if (checkins && checkins.length > 0) {
+    const checkinDates = new Set();
+    checkins.forEach(c => {
+      const date = c.checkin_time ? c.checkin_time.split(' ')[0] : null;
+      if (date) checkinDates.add(date);
+    });
+    const sortedDates = Array.from(checkinDates).sort().reverse();
+    if (sortedDates.length > 0) {
+      let current = new Date(sortedDates[0]);
+      consecutiveDays = 1;
+      for (let i = 1; i < sortedDates.length; i++) {
+        const prev = new Date(sortedDates[i]);
+        const diffDays = Math.floor((current - prev) / (1000 * 60 * 60 * 24));
+        if (diffDays === 1) {
+          consecutiveDays++;
+          current = prev;
+        } else {
+          break;
+        }
+      }
+    }
+  }
+  stats.consecutive_checkins = consecutiveDays;
+
+  return stats;
+}
+
+function checkAndUnlockBadges(userId) {
+  const unlockedBadges = [];
+  const stats = calculateUserStats(userId);
+
+  const allBadges = db.prepare('SELECT * FROM badges').all();
+  const userBadges = db.prepare('SELECT badge_id FROM user_badges WHERE user_id = ?').all(userId);
+  const userBadgeIds = new Set(userBadges.map(b => b.badge_id));
+
+  for (const badge of allBadges) {
+    if (userBadgeIds.has(badge.id)) continue;
+
+    const conditionType = badge.condition_type;
+    const conditionValue = badge.condition_value;
+    const userValue = stats[conditionType] || 0;
+
+    if (userValue >= conditionValue) {
+      const insertStmt = db.prepare(`
+        INSERT INTO user_badges (user_id, badge_id, unlocked_at)
+        VALUES (?, ?, CURRENT_TIMESTAMP)
+      `);
+      insertStmt.run(userId, badge.id);
+      unlockedBadges.push(badge);
+
+      db.prepare(`
+        INSERT INTO user_notifications (user_id, type, content, related_id, related_type, from_user_id, is_read)
+        VALUES (?, 'badge_unlock', ?, ?, 'badge', NULL, 0)
+      `).run(userId, `🎉 恭喜获得成就徽章：${badge.name}`, badge.id);
+    }
+  }
+
+  return unlockedBadges;
+}
+
+app.get('/api/badges', (req, res) => {
+  try {
+    const badges = db.prepare('SELECT * FROM badges ORDER BY category, condition_value').all();
+    res.json({ success: true, badges });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/users/:id/badges', (req, res) => {
+  try {
+    const userId = req.params.id;
+
+    const allBadges = db.prepare('SELECT * FROM badges ORDER BY category, condition_value').all();
+    const userBadges = db.prepare('SELECT * FROM user_badges WHERE user_id = ?').all(userId);
+    const userBadgeMap = new Map();
+    userBadges.forEach(ub => {
+      userBadgeMap.set(ub.badge_id, ub);
+    });
+
+    const stats = calculateUserStats(userId);
+
+    const badgesWithStatus = allBadges.map(badge => {
+      const userBadge = userBadgeMap.get(badge.id);
+      const currentValue = stats[badge.condition_type] || 0;
+      return {
+        ...badge,
+        unlocked: !!userBadge,
+        unlocked_at: userBadge ? userBadge.unlocked_at : null,
+        current_value: currentValue,
+        progress: Math.min(Math.floor((currentValue / badge.condition_value) * 100), 100)
+      };
+    });
+
+    const unlockedCount = badgesWithStatus.filter(b => b.unlocked).length;
+    const totalCount = badgesWithStatus.length;
+
+    const categories = {};
+    badgesWithStatus.forEach(b => {
+      if (!categories[b.category]) {
+        categories[b.category] = [];
+      }
+      categories[b.category].push(b);
+    });
+
+    res.json({
+      success: true,
+      badges: badgesWithStatus,
+      categories,
+      stats: {
+        unlocked_count: unlockedCount,
+        total_count: totalCount,
+        completion_rate: totalCount > 0 ? parseFloat(((unlockedCount / totalCount) * 100).toFixed(1)) : 0
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/users/:id/check-badges', (req, res) => {
+  try {
+    const userId = req.params.id;
+    const unlockedBadges = checkAndUnlockBadges(userId);
+    res.json({ success: true, new_badges: unlockedBadges });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+function initBadges() {
+  const result = db.prepare('SELECT COUNT(*) as count FROM badges').get();
+  const count = result ? Object.values(result)[0] : 0;
+  
+  if (count > 0) {
+    console.log(`🏆 已有 ${count} 个成就徽章`);
+    return;
+  }
+
+  const badges = [
+    { id: 'first_plan', name: '初次发布', icon: '📝', description: '发布第一个Citywalk计划', category: 'create', condition_type: 'created_plans', condition_value: 1, color: '#00B894' },
+    { id: 'plan_creator_3', name: '计划达人', icon: '📋', description: '发布3个Citywalk计划', category: 'create', condition_type: 'created_plans', condition_value: 3, color: '#0984E3' },
+    { id: 'plan_creator_10', name: '资深发起人', icon: '🏆', description: '发布10个Citywalk计划', category: 'create', condition_type: 'created_plans', condition_value: 10, color: '#E17055' },
+    { id: 'city_explorer_3', name: '城市探索者', icon: '🗺️', description: '在3个不同城市参加活动', category: 'explore', condition_type: 'unique_cities', condition_value: 3, color: '#6C5CE7' },
+    { id: 'city_explorer_5', name: '环球旅行家', icon: '🌍', description: '在5个不同城市参加活动', category: 'explore', condition_type: 'unique_cities', condition_value: 5, color: '#A29BFE' },
+    { id: 'social_10', name: '社交达人', icon: '🤝', description: '关注10位搭子', category: 'social', condition_type: 'following_count', condition_value: 10, color: '#FDCB6E' },
+    { id: 'popular_10', name: '人气王', icon: '⭐', description: '获得10位粉丝', category: 'social', condition_type: 'followers_count', condition_value: 10, color: '#FF7675' },
+    { id: 'note_master_5', name: '笔记高手', icon: '✍️', description: '写满5篇路线笔记', category: 'create', condition_type: 'notes_count', condition_value: 5, color: '#00CEC9' },
+    { id: 'note_master_20', name: '专栏作家', icon: '📚', description: '写满20篇路线笔记', category: 'create', condition_type: 'notes_count', condition_value: 20, color: '#55EFC4' },
+    { id: 'activity_5', name: '活动达人', icon: '🎯', description: '参加5场Citywalk活动', category: 'participate', condition_type: 'joined_plans', condition_value: 5, color: '#E84393' },
+    { id: 'activity_20', name: 'Citywalk狂人', icon: '🔥', description: '参加20场Citywalk活动', category: 'participate', condition_type: 'joined_plans', condition_value: 20, color: '#D63031' },
+    { id: 'first_checkin', name: '首签成功', icon: '✅', description: '完成第一次活动签到', category: 'participate', condition_type: 'checkins_count', condition_value: 1, color: '#00B894' },
+    { id: 'checkin_streak_7', name: '连续打卡', icon: '📅', description: '连续7天签到', category: 'participate', condition_type: 'consecutive_checkins', condition_value: 7, color: '#F39C12' },
+    { id: 'collector_10', name: '收藏爱好者', icon: '⭐', description: '收藏10条路线', category: 'collect', condition_type: 'favorites_count', condition_value: 10, color: '#FDCB6E' },
+    { id: 'photo_20', name: '摄影达人', icon: '📷', description: '上传20张活动照片', category: 'create', condition_type: 'photos_count', condition_value: 20, color: '#A29BFE' },
+    { id: 'comment_20', name: '评论达人', icon: '💬', description: '发表20条评论', category: 'social', condition_type: 'comments_count', condition_value: 20, color: '#74B9FF' }
+  ];
+
+  const insertBadge = db.prepare('INSERT INTO badges (id, name, icon, description, category, condition_type, condition_value, color) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+  badges.forEach(b => {
+    insertBadge.run(b.id, b.name, b.icon, b.description, b.category, b.condition_type, b.condition_value, b.color);
+  });
+  console.log(`🏆 已创建 ${badges.length} 个成就徽章`);
+}
+
+initBadges();
 
 app.listen(PORT, () => {
   console.log(`🚀 Citywalk Server running on http://localhost:${PORT}`);

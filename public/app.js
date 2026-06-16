@@ -832,7 +832,95 @@ async function loadMyPlans() {
     `;
   }
 
+  loadUserBadges();
   loadMyTemplatesPreview();
+}
+
+async function loadUserBadges() {
+  if (!currentUser) return;
+
+  try {
+    const res = await api(`${API}/users/${currentUser.id}/badges`);
+    if (res.success) {
+      const badgesGrid = document.getElementById('badgesGrid');
+      const badgesProgress = document.getElementById('badgesProgress');
+
+      if (badgesProgress) {
+        badgesProgress.textContent = `${res.stats.unlocked_count}/${res.stats.total_count}`;
+      }
+
+      if (badgesGrid) {
+        badgesGrid.innerHTML = res.badges.map(badge => renderBadgeCard(badge)).join('');
+      }
+    }
+  } catch (e) {
+    console.error('加载徽章失败:', e);
+  }
+}
+
+function renderBadgeCard(badge) {
+  const isUnlocked = badge.unlocked;
+  const progressPercent = badge.progress || 0;
+
+  return `
+    <div class="badge-card ${isUnlocked ? 'unlocked' : 'locked'}" data-badge-id="${badge.id}" title="${badge.description}">
+      <div class="badge-icon" style="${isUnlocked ? `color: ${badge.color};` : ''}">
+        ${badge.icon}
+      </div>
+      <div class="badge-name">${badge.name}</div>
+      <div class="badge-desc">${badge.description}</div>
+      ${!isUnlocked ? `
+        <div class="badge-progress-bar">
+          <div class="badge-progress-fill" style="width: ${progressPercent}%;"></div>
+        </div>
+        <div class="badge-progress-text">${badge.current_value || 0}/${badge.condition_value}</div>
+      ` : `
+        <div class="badge-unlocked-date">获得于 ${formatDate(badge.unlocked_at)}</div>
+      `}
+    </div>
+  `;
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}/${month}/${day}`;
+}
+
+function showBadgeUnlockToast(badges) {
+  if (!badges || badges.length === 0) return;
+
+  badges.forEach((badge, index) => {
+    setTimeout(() => {
+      const toast = document.createElement('div');
+      toast.className = 'badge-unlock-toast';
+      toast.innerHTML = `
+        <div class="badge-unlock-icon" style="color: ${badge.color};">${badge.icon}</div>
+        <div class="badge-unlock-info">
+          <div class="badge-unlock-title">🎉 获得新成就！</div>
+          <div class="badge-unlock-name">${badge.name}</div>
+          <div class="badge-unlock-desc">${badge.description}</div>
+        </div>
+      `;
+      document.body.appendChild(toast);
+
+      setTimeout(() => {
+        toast.classList.add('show');
+      }, 100);
+
+      setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => {
+          if (toast.parentNode) {
+            toast.parentNode.removeChild(toast);
+          }
+        }, 300);
+      }, 3500);
+    }, index * 500);
+  });
 }
 
 function showPendingRatingsList() {
@@ -901,7 +989,7 @@ async function toggleFavorite(planId, btn) {
     favoriteIds.delete(planId);
     showToast('已取消收藏', 'info');
   } else {
-    await api(`${API}/favorites`, {
+    const res = await api(`${API}/favorites`, {
       method: 'POST',
       body: JSON.stringify({ user_id: currentUser.id, plan_id: planId })
     });
@@ -909,6 +997,10 @@ async function toggleFavorite(planId, btn) {
     btn.textContent = '⭐';
     favoriteIds.add(planId);
     showToast('收藏成功！', 'success');
+
+    if (res && res.new_badges && res.new_badges.length > 0) {
+      showBadgeUnlockToast(res.new_badges);
+    }
   }
   
   const activeTab = document.querySelector('.nav-btn.active')?.dataset.tab;
@@ -1300,6 +1392,10 @@ async function joinPlan(planId) {
     showToast('成功加入！快去认识你的搭子吧 🎉', 'success');
     closeDetailModal();
     refreshCurrentTab();
+
+    if (res.plan && res.plan.new_badges && res.plan.new_badges.length > 0) {
+      showBadgeUnlockToast(res.plan.new_badges);
+    }
   } else {
     showToast(res.error || '加入失败', 'error');
   }
@@ -1342,6 +1438,10 @@ async function checkinPlan(planId) {
     showToast('签到成功！🎉 祝你Citywalk愉快~', 'success');
     if (currentDetailPlanId === planId) {
       openPlanDetail(planId);
+    }
+
+    if (res.new_badges && res.new_badges.length > 0) {
+      showBadgeUnlockToast(res.new_badges);
     }
   } else {
     showToast(res.error || '签到失败', 'error');
@@ -1556,6 +1656,10 @@ async function uploadPhoto() {
     showToast('照片上传成功！✨', 'success');
     closeUploadPhotoModal();
     loadPlanPhotos(planId);
+
+    if (res.photo && res.photo.new_badges && res.photo.new_badges.length > 0) {
+      showBadgeUnlockToast(res.photo.new_badges);
+    }
   } else {
     showToast(res.error || '上传失败', 'error');
   }
@@ -1848,6 +1952,11 @@ async function submitComment(noteId, content, parentId = null) {
   
   if (res.success) {
     showToast('评论发布成功！', 'success');
+
+    if (res.comment && res.comment.new_badges && res.comment.new_badges.length > 0) {
+      showBadgeUnlockToast(res.comment.new_badges);
+    }
+
     return res.comment;
   } else {
     showToast(res.error || '评论失败', 'error');
@@ -2309,6 +2418,10 @@ async function submitNote(e) {
     document.getElementById('noteModal').classList.add('hidden');
     const planId = document.getElementById('notePlanId').value;
     openPlanDetail(planId);
+
+    if (!editId && res.note && res.note.new_badges && res.note.new_badges.length > 0) {
+      showBadgeUnlockToast(res.note.new_badges);
+    }
   } else {
     showToast(res.error || '保存失败', 'error');
   }
@@ -2715,6 +2828,10 @@ async function toggleFollow(targetUserId, btn) {
       btn.classList.add('following');
       btn.textContent = btn.dataset.followingText || '已关注';
       showToast('关注成功！', 'success');
+
+      if (res.new_badges && res.new_badges.follower && res.new_badges.follower.length > 0) {
+        showBadgeUnlockToast(res.new_badges.follower);
+      }
     }
     loadTimeline();
   } else {
@@ -2812,6 +2929,10 @@ async function initCreatePlanForm() {
       e.target.reset();
       initDifficultySelector();
       refreshCurrentTab();
+
+      if (res.plan && res.plan.new_badges && res.plan.new_badges.length > 0) {
+        showBadgeUnlockToast(res.plan.new_badges);
+      }
     } else {
       showToast(res.error || '发布失败', 'error');
     }

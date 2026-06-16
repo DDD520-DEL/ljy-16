@@ -546,6 +546,31 @@ function seedData() {
   });
   console.log(`✅ 已创建 ${photoLikes.length} 条照片点赞`);
 
+  const badges = [
+    { id: 'first_plan', name: '初次发布', icon: '📝', description: '发布第一个Citywalk计划', category: 'create', condition_type: 'created_plans', condition_value: 1, color: '#00B894' },
+    { id: 'plan_creator_3', name: '计划达人', icon: '📋', description: '发布3个Citywalk计划', category: 'create', condition_type: 'created_plans', condition_value: 3, color: '#0984E3' },
+    { id: 'plan_creator_10', name: '资深发起人', icon: '🏆', description: '发布10个Citywalk计划', category: 'create', condition_type: 'created_plans', condition_value: 10, color: '#E17055' },
+    { id: 'city_explorer_3', name: '城市探索者', icon: '🗺️', description: '在3个不同城市参加活动', category: 'explore', condition_type: 'unique_cities', condition_value: 3, color: '#6C5CE7' },
+    { id: 'city_explorer_5', name: '环球旅行家', icon: '🌍', description: '在5个不同城市参加活动', category: 'explore', condition_type: 'unique_cities', condition_value: 5, color: '#A29BFE' },
+    { id: 'social_10', name: '社交达人', icon: '🤝', description: '关注10位搭子', category: 'social', condition_type: 'following_count', condition_value: 10, color: '#FDCB6E' },
+    { id: 'popular_10', name: '人气王', icon: '⭐', description: '获得10位粉丝', category: 'social', condition_type: 'followers_count', condition_value: 10, color: '#FF7675' },
+    { id: 'note_master_5', name: '笔记高手', icon: '✍️', description: '写满5篇路线笔记', category: 'create', condition_type: 'notes_count', condition_value: 5, color: '#00CEC9' },
+    { id: 'note_master_20', name: '专栏作家', icon: '📚', description: '写满20篇路线笔记', category: 'create', condition_type: 'notes_count', condition_value: 20, color: '#55EFC4' },
+    { id: 'activity_5', name: '活动达人', icon: '🎯', description: '参加5场Citywalk活动', category: 'participate', condition_type: 'joined_plans', condition_value: 5, color: '#E84393' },
+    { id: 'activity_20', name: 'Citywalk狂人', icon: '🔥', description: '参加20场Citywalk活动', category: 'participate', condition_type: 'joined_plans', condition_value: 20, color: '#D63031' },
+    { id: 'first_checkin', name: '首签成功', icon: '✅', description: '完成第一次活动签到', category: 'participate', condition_type: 'checkins_count', condition_value: 1, color: '#00B894' },
+    { id: 'checkin_streak_7', name: '连续打卡', icon: '📅', description: '连续7天签到', category: 'participate', condition_type: 'consecutive_checkins', condition_value: 7, color: '#F39C12' },
+    { id: 'collector_10', name: '收藏爱好者', icon: '⭐', description: '收藏10条路线', category: 'collect', condition_type: 'favorites_count', condition_value: 10, color: '#FDCB6E' },
+    { id: 'photo_20', name: '摄影达人', icon: '📷', description: '上传20张活动照片', category: 'create', condition_type: 'photos_count', condition_value: 20, color: '#A29BFE' },
+    { id: 'comment_20', name: '评论达人', icon: '💬', description: '发表20条评论', category: 'social', condition_type: 'comments_count', condition_value: 20, color: '#74B9FF' }
+  ];
+
+  const insertBadge = db.prepare('INSERT INTO badges (id, name, icon, description, category, condition_type, condition_value, color) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+  badges.forEach(b => {
+    insertBadge.run(b.id, b.name, b.icon, b.description, b.category, b.condition_type, b.condition_value, b.color);
+  });
+  console.log(`✅ 已创建 ${badges.length} 个成就徽章`);
+
   console.log('\n🎉 数据初始化完成！');
   console.log('\n📋 默认用户账号：');
   users.forEach((u, i) => {

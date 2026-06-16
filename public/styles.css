@@ -4182,6 +4182,188 @@ body {
   gap: 16px;
 }
 
+.badges-section {
+  margin-top: 32px;
+  background: var(--bg-card);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: var(--shadow-sm);
+}
+
+.badges-progress {
+  font-size: 14px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  background: var(--bg-light);
+  padding: 4px 12px;
+  border-radius: 20px;
+}
+
+.badges-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 16px;
+}
+
+.badge-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 16px 12px;
+  border-radius: 12px;
+  background: var(--bg-light);
+  transition: all 0.3s ease;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.badge-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.badge-card.unlocked {
+  background: linear-gradient(135deg, rgba(253, 203, 110, 0.1), rgba(255, 118, 117, 0.1));
+  border: 1px solid rgba(253, 203, 110, 0.3);
+}
+
+.badge-card.locked {
+  opacity: 0.6;
+  filter: grayscale(100%);
+}
+
+.badge-card.locked:hover {
+  opacity: 0.8;
+  filter: grayscale(60%);
+}
+
+.badge-icon {
+  font-size: 40px;
+  margin-bottom: 8px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+}
+
+.badge-card.unlocked .badge-icon {
+  animation: badge-glow 2s ease-in-out infinite alternate;
+}
+
+@keyframes badge-glow {
+  from {
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+  }
+  to {
+    filter: drop-shadow(0 0 8px currentColor);
+  }
+}
+
+.badge-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.badge-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin-bottom: 8px;
+}
+
+.badge-progress-bar {
+  width: 100%;
+  height: 4px;
+  background: var(--bg);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.badge-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), var(--primary-light));
+  border-radius: 2px;
+  transition: width 0.5s ease;
+}
+
+.badge-progress-text {
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
+
+.badge-unlocked-date {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  margin-top: auto;
+}
+
+.badge-unlock-toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: var(--bg-card);
+  border-radius: 12px;
+  padding: 16px 20px;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  z-index: 10000;
+  transform: translateX(120%);
+  transition: transform 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  min-width: 280px;
+  border-left: 4px solid var(--primary);
+}
+
+.badge-unlock-toast.show {
+  transform: translateX(0);
+}
+
+.badge-unlock-icon {
+  font-size: 48px;
+  flex-shrink: 0;
+  animation: badge-pop-in 0.5s ease-out;
+}
+
+@keyframes badge-pop-in {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.badge-unlock-info {
+  flex: 1;
+}
+
+.badge-unlock-title {
+  font-size: 13px;
+  color: var(--primary);
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.badge-unlock-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.badge-unlock-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
 .my-template-card {
   background: white;
   border-radius: var(--radius-md);
