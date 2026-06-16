@@ -1016,6 +1016,8 @@ async function openPlanDetail(planId) {
         </div>
       </div>
 
+      ${buildWeatherPanelHtml(plan)}
+
       <div class="detail-description">
         <h3>📖 路线描述</h3>
         <p>${plan.description || '暂无详细描述'}</p>
@@ -1130,6 +1132,8 @@ async function openPlanDetail(planId) {
 
   document.getElementById('planDetailContent').innerHTML = content;
   document.getElementById('planDetailModal').classList.remove('hidden');
+
+  loadWeatherForPlan();
   
   const followBtns = document.querySelectorAll('#planDetailModal .participant-follow-btn');
   followBtns.forEach(async (btn) => {
@@ -4097,6 +4101,207 @@ function closeShareGeneratorModal() {
 
 function closeShareResultModal() {
   document.getElementById('shareResultModal').classList.add('hidden');
+}
+
+const weatherIconMap = {
+  '113': '☀️', '116': '⛅', '119': '☁️', '122': '☁️',
+  '143': '🌫️', '176': '🌦️', '179': '🌨️', '182': '🌨️',
+  '185': '🌨️', '200': '⛈️', '227': '🌨️', '230': '❄️',
+  '248': '🌫️', '260': '🌫️', '263': '🌦️', '266': '🌧️',
+  '281': '🌧️', '284': '🌧️', '293': '🌦️', '296': '🌧️',
+  '299': '🌧️', '302': '🌧️', '305': '🌧️', '308': '🌧️',
+  '311': '🌧️', '314': '🌧️', '317': '🌨️', '320': '🌨️',
+  '323': '🌨️', '326': '🌨️', '329': '❄️', '332': '❄️',
+  '335': '❄️', '338': '❄️', '350': '🌧️', '353': '🌦️',
+  '356': '🌧️', '359': '🌧️', '362': '🌨️', '365': '🌨️',
+  '368': '🌨️', '371': '❄️', '374': '🌨️', '377': '🌨️',
+  '386': '⛈️', '389': '⛈️', '392': '⛈️', '395': '❄️'
+};
+
+function getWeatherIcon(code) {
+  return weatherIconMap[String(code)] || '🌤️';
+}
+
+function isDateWithinForecast(targetDate) {
+  const target = new Date(targetDate);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const targetDay = new Date(target.getFullYear(), target.getMonth(), target.getDate());
+  const diffMs = targetDay - today;
+  const diffDays = diffMs / (1000 * 60 * 60 * 24);
+  return diffDays >= 0 && diffDays <= 2;
+}
+
+function formatDateStr(dateStr) {
+  const d = new Date(dateStr);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+async function fetchWeatherData(city, dateStr) {
+  try {
+    const res = await api(`${API}/weather?city=${encodeURIComponent(city)}&date=${dateStr}`);
+    if (!res.success) return null;
+    return res.weather;
+  } catch (e) {
+    return null;
+  }
+}
+
+function buildWeatherPanelHtml(plan) {
+  const dateStr = formatDateStr(plan.start_time);
+  const withinForecast = isDateWithinForecast(plan.start_time);
+  const planDate = new Date(plan.start_time);
+  const now = new Date();
+  const isPast = planDate < now;
+
+  return `
+    <div class="detail-section weather-panel" id="weatherPanel" data-city="${plan.city}" data-date="${dateStr}">
+      <div class="weather-panel-header">
+        <h3>🌤️ 活动天气</h3>
+        <button class="weather-refresh-btn" onclick="refreshWeather()" title="刷新天气">
+          <span class="weather-refresh-icon" id="weatherRefreshIcon">🔄</span>
+        </button>
+      </div>
+      <div class="weather-panel-content" id="weatherContent">
+        <div class="weather-loading">
+          <span class="weather-loading-spinner"></span>
+          <span>正在获取天气数据...</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function loadWeatherForPlan() {
+  const panel = document.getElementById('weatherPanel');
+  if (!panel) return;
+  const city = panel.dataset.city;
+  const dateStr = panel.dataset.date;
+  const contentEl = document.getElementById('weatherContent');
+
+  const weather = await fetchWeatherData(city, dateStr);
+  if (!weather) {
+    contentEl.innerHTML = `
+      <div class="weather-error">
+        <span>❌ 天气数据获取失败</span>
+        <button class="weather-retry-btn" onclick="refreshWeather()">重试</button>
+      </div>
+    `;
+    return;
+  }
+
+  const planDate = dateStr;
+  const withinForecast = isDateWithinForecast(panel.dataset.date + 'T00:00:00');
+  const forecastDay = (weather.forecast || []).find(f => f.date === planDate);
+
+  let currentHtml = '';
+  if (weather.current) {
+    const icon = getWeatherIcon(weather.current.icon);
+    currentHtml = `
+      <div class="weather-current">
+        <div class="weather-current-icon">${icon}</div>
+        <div class="weather-current-info">
+          <div class="weather-current-temp">${weather.current.temp}°C</div>
+          <div class="weather-current-desc">${weather.current.desc}</div>
+          <div class="weather-current-detail">体感 ${weather.current.feelsLike}°C · 湿度 ${weather.current.humidity}%</div>
+        </div>
+      </div>
+    `;
+  }
+
+  let forecastHtml = '';
+  if (!withinForecast) {
+    forecastHtml = `
+      <div class="weather-forecast weather-pending">
+        <div class="weather-pending-icon">📅</div>
+        <div class="weather-pending-text">活动日期超出预报范围</div>
+        <div class="weather-pending-hint">临近活动日时将显示天气预报</div>
+      </div>
+    `;
+  } else if (forecastDay) {
+    const icon = getWeatherIcon(forecastDay.icon);
+    const rainChance = forecastDay.chanceOfRain;
+    const rainLevel = rainChance > 60 ? 'high' : rainChance > 30 ? 'mid' : 'low';
+    forecastHtml = `
+      <div class="weather-forecast">
+        <div class="weather-forecast-icon">${icon}</div>
+        <div class="weather-forecast-body">
+          <div class="weather-forecast-desc">${forecastDay.desc}</div>
+          <div class="weather-forecast-temps">
+            <span class="weather-temp-high">${forecastDay.maxTemp}°</span>
+            <span class="weather-temp-sep">/</span>
+            <span class="weather-temp-low">${forecastDay.minTemp}°</span>
+          </div>
+          <div class="weather-forecast-rain">
+            <span class="weather-rain-icon">💧</span>
+            <span class="weather-rain-label">降水概率</span>
+            <div class="weather-rain-bar">
+              <div class="weather-rain-fill weather-rain-${rainLevel}" style="width: ${rainChance}%"></div>
+            </div>
+            <span class="weather-rain-value">${rainChance}%</span>
+          </div>
+        </div>
+      </div>
+    `;
+  } else {
+    forecastHtml = `
+      <div class="weather-forecast weather-pending">
+        <div class="weather-pending-icon">🔍</div>
+        <div class="weather-pending-text">暂无该日期的预报数据</div>
+      </div>
+    `;
+  }
+
+  let extraForecastHtml = '';
+  if (withinForecast && weather.forecast && weather.forecast.length > 0) {
+    const otherDays = weather.forecast.filter(f => f.date !== planDate);
+    if (otherDays.length > 0) {
+      extraForecastHtml = `
+        <div class="weather-extra-forecast">
+          ${otherDays.map(f => {
+            const icon = getWeatherIcon(f.icon);
+            const d = new Date(f.date);
+            const label = `${d.getMonth() + 1}/${d.getDate()}`;
+            return `
+              <div class="weather-extra-day">
+                <span class="weather-extra-icon">${icon}</span>
+                <span class="weather-extra-date">${label}</span>
+                <span class="weather-extra-temps">${f.maxTemp}°/${f.minTemp}°</span>
+                <span class="weather-extra-rain">💧${f.chanceOfRain}%</span>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+    }
+  }
+
+  contentEl.innerHTML = `
+    <div class="weather-body">
+      ${currentHtml}
+      ${forecastHtml}
+      ${extraForecastHtml}
+      <div class="weather-footer">
+        <span class="weather-update-time">更新于 ${new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</span>
+        <span class="weather-source">数据来源: wttr.in</span>
+      </div>
+    </div>
+  `;
+}
+
+async function refreshWeather() {
+  const refreshIcon = document.getElementById('weatherRefreshIcon');
+  const contentEl = document.getElementById('weatherContent');
+  if (refreshIcon) refreshIcon.classList.add('spinning');
+  contentEl.innerHTML = `
+    <div class="weather-loading">
+      <span class="weather-loading-spinner"></span>
+      <span>正在刷新天气数据...</span>
+    </div>
+  `;
+  await loadWeatherForPlan();
+  const icon = document.getElementById('weatherRefreshIcon');
+  if (icon) icon.classList.remove('spinning');
 }
 
 document.addEventListener('DOMContentLoaded', init);

@@ -2733,6 +2733,79 @@ app.get('/api/share', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'share.html'));
 });
 
+const https = require('https');
+
+const weatherDescZh = {
+  'Sunny': '晴', 'Clear': '晴', 'Partly cloudy': '多云', 'Partly Cloudy': '多云',
+  'Cloudy': '阴', 'Overcast': '阴', 'Mist': '薄雾', 'Fog': '雾',
+  'Light rain': '小雨', 'Light rain shower': '阵雨', 'Patchy rain nearby': '零星小雨',
+  'Moderate rain': '中雨', 'Moderate rain at times': '间歇中雨',
+  'Heavy rain': '大雨', 'Heavy rain at times': '间歇大雨',
+  'Light drizzle': '毛毛雨', 'Patchy light drizzle': '零星毛毛雨',
+  'Torrential rain shower': '暴雨', 'Moderate or heavy rain shower': '中到大阵雨',
+  'Light rain shower': '小阵雨', 'Patchy light rain': '零星小雨',
+  'Patchy light rain with thunder': '雷阵雨', 'Moderate or heavy rain with thunder': '雷暴雨',
+  'Thundery outbreaks in nearby': '局部雷暴',
+  'Light snow': '小雪', 'Patchy light snow': '零星小雪',
+  'Moderate snow': '中雪', 'Heavy snow': '大雪',
+  'Patchy moderate snow': '零星中雪', 'Patchy heavy snow': '零星大雪',
+  'Light snow showers': '小阵雪', 'Moderate or heavy snow showers': '中到大阵雪',
+  'Blizzard': '暴风雪', 'Patchy sleet nearby': '零星雨夹雪',
+  'Light sleet': '小雨夹雪', 'Moderate or heavy sleet': '中到大雨夹雪',
+  'Light freezing rain': '小雨凇', 'Moderate or heavy freezing rain': '中到大雨凇',
+  'Ice pellets': '冰粒', 'Light showers of ice pellets': '小冰粒阵雨',
+  'Blowing snow': '风吹雪', 'Blizzard': '暴风雪'
+};
+
+function translateWeatherDesc(desc) {
+  if (!desc) return '';
+  return weatherDescZh[desc.trim()] || desc.trim();
+}
+
+app.get('/api/weather', (req, res) => {
+  const { city, date } = req.query;
+  if (!city) {
+    return res.status(400).json({ error: '缺少城市参数' });
+  }
+
+  const url = `https://wttr.in/${encodeURIComponent(city)}?format=j1&lang=zh`;
+  https.get(url, (apiRes) => {
+    let data = '';
+    apiRes.on('data', (chunk) => { data += chunk; });
+    apiRes.on('end', () => {
+      try {
+        const json = JSON.parse(data);
+        const current = json.current_condition?.[0];
+        const todayForecast = json.weather?.[0];
+        const result = {
+          city,
+          current: current ? {
+            temp: current.temp_C,
+            feelsLike: current.FeelsLikeC,
+            humidity: current.humidity,
+            desc: translateWeatherDesc(current.lang_zh?.[0]?.value || current.weatherDesc?.[0]?.value || ''),
+            icon: current.weatherCode
+          } : null,
+          forecast: (json.weather || []).map((day, idx) => ({
+            date: day.date,
+            maxTemp: day.maxtempC,
+            minTemp: day.mintempC,
+            avgTemp: day.avgtempC,
+            desc: translateWeatherDesc(day.hourly?.[4]?.lang_zh?.[0]?.value || day.hourly?.[4]?.weatherDesc?.[0]?.value || ''),
+            icon: day.hourly?.[4]?.weatherCode || '',
+            chanceOfRain: Math.max(...(day.hourly || []).map(h => parseInt(h.chanceofrain || '0')))
+          }))
+        };
+        res.json({ success: true, weather: result });
+      } catch (e) {
+        res.json({ success: false, error: '天气数据解析失败' });
+      }
+    });
+  }).on('error', () => {
+    res.json({ success: false, error: '天气服务暂不可用' });
+  });
+});
+
 app.listen(PORT, () => {
   console.log(`🚀 Citywalk Server running on http://localhost:${PORT}`);
   console.log(`📁 Static files served from: ${path.join(__dirname, '..', 'public')}`);
