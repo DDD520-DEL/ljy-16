@@ -448,6 +448,88 @@ function seedData() {
   });
   console.log(`✅ 已创建 ${feeds.length} 条动态`);
 
+  const completedPlans = plans.filter(p => p.status === 'completed');
+  const photos = [];
+  const photoThemes = {
+    old_building: ['老洋房外观', '精致铁门', '复古阳台', '花园小径', '欧式建筑细节'],
+    market: ['热闹的菜市场', '新鲜蔬果', '老字号店铺', '街边小吃', '烟火气'],
+    bridge: ['苏州河风景', '夕阳下的桥', '城市天际线', '桥下风光', '河水波光'],
+    alley: ['弄堂入口', '石库门建筑', '晾晒的衣服', '街边小店', '邻里生活'],
+    coffee: ['精致咖啡', '店内装修', '拉花艺术', '窗边座位', '咖啡器具'],
+    street_art: ['涂鸦墙', '艺术装置', '彩色壁画', '创意雕塑', '街头表演'],
+    river: ['滨江步道', '江景夜色', '对岸风景', '亲水平台', '跑步道'],
+    park: ['公园小径', '湖泊风景', '古树名木', '草坪绿地', '亭台楼阁'],
+    night: ['城市夜景', '霓虹灯光', '夜市灯火', '月光下的路', '温馨小店'],
+    food: ['美味小吃', '街头美食', '丰盛餐桌', '特色菜品', '美食制作']
+  };
+
+  const photoLocations = {
+    4: ['永康路', '嘉善路', '建国西路', '岳阳路', '衡山路'],
+    6: ['南锣鼓巷', '菊儿胡同', '帽儿胡同', '烟袋斜街', '什刹海'],
+    8: ['建设巷', '电子科大', '建设路', '第五大道', '小吃街入口'],
+    11: ['豫园', '九曲桥', '城隍庙', '豫园商城', '老上海小吃街']
+  };
+
+  const completedPlanIds = completedPlans.map(p => p.id);
+  
+  completedPlans.forEach(plan => {
+    const participantIds = db.prepare('SELECT user_id FROM plan_participants WHERE plan_id = ?').all(plan.id).map(p => p.user_id);
+    const themePhotos = photoThemes[plan.theme] || ['城市风景', '街边随拍', '活动合影', '美食记录', '风景照'];
+    const locations = photoLocations[plan.id] || [plan.city + '街头', plan.meeting_point, '沿途风景'];
+    
+    const photoCount = Math.floor(Math.random() * 5) + 3;
+    for (let i = 0; i < photoCount; i++) {
+      const uploaderId = participantIds[Math.floor(Math.random() * participantIds.length)];
+      const photoIdx = i % themePhotos.length;
+      photos.push({
+        plan_id: plan.id,
+        user_id: uploaderId,
+        image_url: `https://picsum.photos/seed/${plan.id}-${i}/600/450`,
+        caption: themePhotos[photoIdx] + ' - ' + ['太好看了！', '随手拍的', '分享一下', '这个角度绝了', '打卡成功'][i % 5],
+        location: locations[i % locations.length],
+        created_at: new Date(Date.now() - Math.floor(Math.random() * 7 * 24) * 3600 * 1000).toISOString().slice(0, 19).replace('T', ' ')
+      });
+    }
+  });
+
+  const insertPhoto = db.prepare(`
+    INSERT INTO activity_photos (plan_id, user_id, image_url, caption, location, created_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+
+  const photoIds = [];
+  photos.forEach(p => {
+    const result = insertPhoto.run(p.plan_id, p.user_id, p.image_url, p.caption, p.location, p.created_at);
+    photoIds.push(result.lastInsertRowid);
+  });
+  console.log(`✅ 已创建 ${photos.length} 张活动照片`);
+
+  const photoLikes = [];
+  photoIds.forEach(photoId => {
+    const photo = photos.find(p => p.id === photoId) || photos[photoIds.indexOf(photoId)];
+    const planId = photo ? photo.plan_id : completedPlanIds[Math.floor(Math.random() * completedPlanIds.length)];
+    const participantIds = db.prepare('SELECT user_id FROM plan_participants WHERE plan_id = ?').all(planId).map(p => p.user_id);
+    const likeCount = Math.floor(Math.random() * 5);
+    
+    const shuffled = participantIds.sort(() => 0.5 - Math.random());
+    for (let i = 0; i < Math.min(likeCount, shuffled.length); i++) {
+      if (shuffled[i] !== photo.user_id) {
+        photoLikes.push({
+          photo_id: photoId,
+          user_id: shuffled[i]
+        });
+      }
+    }
+  });
+
+  const insertPhotoLike = db.prepare('INSERT INTO photo_likes (photo_id, user_id) VALUES (?, ?)');
+  photoLikes.forEach(pl => {
+    try {
+      insertPhotoLike.run(pl.photo_id, pl.user_id);
+    } catch(e) {}
+  });
+  console.log(`✅ 已创建 ${photoLikes.length} 条照片点赞`);
+
   console.log('\n🎉 数据初始化完成！');
   console.log('\n📋 默认用户账号：');
   users.forEach((u, i) => {

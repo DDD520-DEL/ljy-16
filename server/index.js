@@ -867,7 +867,19 @@ app.get('/api/routes/popular', (req, res) => {
       r.rating_count = ratingCount;
       r.avg_rating = parseFloat(avgRating.toFixed(2));
 
-      const score = r.popularity * 2 + (r.total_likes || 0) + (r.notes_count || 0) * 3 + avgRating * 10 * ratingCount;
+      const photos = db.prepare('SELECT * FROM activity_photos WHERE plan_id = ?').all(r.id);
+      const photoCount = photos.length;
+      r.photos_count = photoCount;
+
+      let photoLikes = 0;
+      for (const ph of photos) {
+        const likeCount = db.prepare('SELECT COUNT(*) as count FROM photo_likes WHERE photo_id = ?').get(ph.id);
+        photoLikes += likeCount ? Object.values(likeCount)[0] : 0;
+      }
+      r.photo_likes = photoLikes;
+
+      const score = r.popularity * 2 + (r.total_likes || 0) + (r.notes_count || 0) * 3 
+        + avgRating * 10 * ratingCount + photoCount * 5 + photoLikes * 2;
       r.hot_score = parseFloat(score.toFixed(2));
     }
 
@@ -1697,6 +1709,203 @@ app.get('/api/cities', (req, res) => {
     if (!cityList.includes(c)) cityList.push(c);
   }
   res.json({ success: true, cities: Array.from(new Set(cityList)).sort() });
+});
+
+app.post('/api/photos', (req, res) => {
+  try {
+    const { plan_id, user_id, image_url, caption, location } = req.body;
+    if (!plan_id || !user_id || !image_url) {
+      return res.status(400).json({ error: '缺少必填字段' });
+    }
+
+    const plan = db.prepare('SELECT * FROM citywalk_plans WHERE id = ?').get(plan_id);
+    if (!plan) {
+      return res.status(404).json({ error: '活动不存在' });
+    }
+
+    const participant = db.prepare('SELECT * FROM plan_participants WHERE plan_id = ? AND user_id = ?').get(plan_id, user_id);
+    if (!participant) {
+      return res.status(403).json({ error: '只有活动参与者才能上传照片' });
+    }
+
+    const stmt = db.prepare(`
+      INSERT INTO activity_photos (plan_id, user_id, image_url, caption, location)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    const result = stmt.run(
+      plan_id, user_id, image_url,
+      caption || '', location || ''
+    );
+
+    const photo = db.prepare(`
+      SELECT ph.*, u.username as author_name, u.avatar as author_avatar
+      FROM activity_photos ph
+      LEFT JOIN users u ON ph.user_id = u.id
+      WHERE ph.id = ?
+    `).get(result.lastInsertRowid);
+
+    if (photo) {
+      photo.author_name = photo.author_name || photo.u_username;
+      photo.author_avatar = photo.author_avatar || photo.u_avatar;
+      photo.likes = 0;
+      photo.is_liked = false;
+    }
+
+    createFeed(user_id, 'upload_photo', result.lastInsertRowid, 'photo', {
+      plan_id: plan_id,
+      plan_title: plan.title
+    });
+
+    res.json({ success: true, photo });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/plans/:id/photos', (req, res) => {
+  try {
+    const planId = req.params.id;
+    const { user_id, page = 1, limit = 30 } = req.query;
+
+    const plan = db.prepare('SELECT * FROM citywalk_plans WHERE id = ?').get(planId);
+    if (!plan) {
+      return res.status(404).json({ error: '活动不存在' });
+    }
+
+    const photos = db.prepare(`
+      SELECT ph.*, u.username as author_name, u.avatar as author_avatar
+      FROM activity_photos ph
+      LEFT JOIN users u ON ph.user_id = u.id
+      WHERE ph.plan_id = ?
+      ORDER BY ph.created_at DESC
+      LIMIT ? OFFSET ?
+    `).all(planId, parseInt(limit), (parseInt(page) - 1) * parseInt(limit));
+
+    const processedPhotos = photos.map(ph => {
+      const photo = { ...ph };
+      photo.author_name = photo.author_name || photo.u_username;
+      photo.author_avatar = photo.author_avatar || photo.u_avatar;
+      
+      const likeCount = db.prepare('SELECT COUNT(*) as count FROM photo_likes WHERE photo_id = ?').get(photo.id);
+      photo.likes = likeCount ? Object.values(likeCount)[0] : 0;
+      
+      if (user_id) {
+        const liked = db.prepare('SELECT * FROM photo_likes WHERE photo_id = ? AND user_id = ?').get(photo.id, user_id);
+        photo.is_liked = !!liked;
+      } else {
+        photo.is_liked = false;
+      }
+      
+      return photo;
+    });
+
+    const totalResult = db.prepare('SELECT COUNT(*) as count FROM activity_photos WHERE plan_id = ?').get(planId);
+    const total = totalResult ? Object.values(totalResult)[0] : 0;
+
+    res.json({
+      success: true,
+      photos: processedPhotos,
+      total,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      has_more: total > parseInt(page) * parseInt(limit)
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/photos/:id/like', (req, res) => {
+  try {
+    const photoId = req.params.id;
+    const { user_id } = req.body;
+
+    if (!user_id) {
+      return res.status(400).json({ error: '缺少用户ID' });
+    }
+
+    const photo = db.prepare('SELECT * FROM activity_photos WHERE id = ?').get(photoId);
+    if (!photo) {
+      return res.status(404).json({ error: '照片不存在' });
+    }
+
+    const existing = db.prepare('SELECT * FROM photo_likes WHERE photo_id = ? AND user_id = ?').get(photoId, user_id);
+    if (existing) {
+      db.prepare('DELETE FROM photo_likes WHERE photo_id = ? AND user_id = ?').run(photoId, user_id);
+    } else {
+      db.prepare('INSERT INTO photo_likes (photo_id, user_id) VALUES (?, ?)').run(photoId, user_id);
+      if (photo.user_id !== user_id) {
+        db.prepare(`
+          INSERT INTO user_notifications (user_id, type, content, related_id, related_type, from_user_id, is_read)
+          VALUES (?, 'photo_like', '赞了你的照片', ?, 'photo', ?, 0)
+        `).run(photo.user_id, photoId, user_id);
+      }
+    }
+
+    const likeCount = db.prepare('SELECT COUNT(*) as count FROM photo_likes WHERE photo_id = ?').get(photoId);
+    const likes = likeCount ? Object.values(likeCount)[0] : 0;
+    const isLiked = !existing;
+
+    res.json({ success: true, likes, is_liked: isLiked });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/photos/:id', (req, res) => {
+  try {
+    const photoId = req.params.id;
+    const { user_id } = req.body;
+
+    if (!user_id) {
+      return res.status(400).json({ error: '缺少用户ID' });
+    }
+
+    const photo = db.prepare('SELECT * FROM activity_photos WHERE id = ?').get(photoId);
+    if (!photo) {
+      return res.status(404).json({ error: '照片不存在' });
+    }
+
+    if (photo.user_id !== user_id) {
+      return res.status(403).json({ error: '只能删除自己上传的照片' });
+    }
+
+    db.transaction(() => {
+      db.prepare('DELETE FROM photo_likes WHERE photo_id = ?').run(photoId);
+      db.prepare('DELETE FROM activity_photos WHERE id = ?').run(photoId);
+    });
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/users/:id/photos-stats', (req, res) => {
+  try {
+    const userId = req.params.id;
+
+    const photoCountResult = db.prepare('SELECT COUNT(*) as count FROM activity_photos WHERE user_id = ?').get(userId);
+    const photoCount = photoCountResult ? Object.values(photoCountResult)[0] : 0;
+
+    const likeCountResult = db.prepare(`
+      SELECT COUNT(*) as count 
+      FROM photo_likes pl 
+      JOIN activity_photos ph ON pl.photo_id = ph.id 
+      WHERE ph.user_id = ?
+    `).get(userId);
+    const totalLikes = likeCountResult ? Object.values(likeCountResult)[0] : 0;
+
+    res.json({
+      success: true,
+      stats: {
+        photos_count: photoCount,
+        total_likes: totalLikes
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.listen(PORT, () => {

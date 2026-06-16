@@ -235,6 +235,10 @@
                 <div class="stat-label">参与计划</div>
               </div>
               <div class="stat-item">
+                <div class="stat-num" id="statPhotos">0</div>
+                <div class="stat-label">上传照片</div>
+              </div>
+              <div class="stat-item">
                 <div class="stat-num" id="statFavorites">0</div>
                 <div class="stat-label">收藏路线</div>
               </div>
@@ -436,6 +440,34 @@
           <button class="close-btn" id="closeCommentBtn">×</button>
         </div>
         <div id="commentModalContent"></div>
+      </div>
+    </div>
+
+    <div id="uploadPhotoModal" class="modal">
+      <div class="modal-content note-modal">
+        <div class="modal-header">
+          <h2>📷 上传照片</h2>
+          <button class="close-btn" onclick="closeUploadPhotoModal()">×</button>
+        </div>
+        <form id="uploadPhotoForm" onsubmit="event.preventDefault(); uploadPhoto();">
+          <input type="hidden" id="uploadPhotoPlanId">
+          <div class="form-group">
+            <label>照片链接 *</label>
+            <input type="text" id="uploadPhotoUrl" placeholder="输入照片图片链接" required>
+          </div>
+          <div class="form-group">
+            <label>描述（选填）</label>
+            <textarea id="uploadPhotoCaption" rows="3" placeholder="分享一下这张照片的故事..."></textarea>
+          </div>
+          <div class="form-group">
+            <label>拍摄地点（选填）</label>
+            <input type="text" id="uploadPhotoLocation" placeholder="在哪里拍的？">
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-outline" onclick="closeUploadPhotoModal()">取消</button>
+            <button type="submit" class="btn btn-primary">上传照片 📷</button>
+          </div>
+        </form>
       </div>
     </div>
 

@@ -18,6 +18,9 @@ let currentCalendarDate = new Date();
 let calendarPlans = [];
 let currentDateTab = 'recruiting';
 let selectedDatePlans = [];
+let currentDetailTab = 'notes';
+let currentDetailPlanId = null;
+let currentPlanPhotos = [];
 
 const avatarPool = ['🧑', '👩', '👨', '👧', '👦', '🧔', '👵', '👴', '🧑‍🎨', '👨‍🍳', '👩‍💻', '🧑‍🚀', '🎨', '📷', '🎭', '🎵'];
 
@@ -564,6 +567,7 @@ async function loadPopularRoutes() {
               <span style="color: ${theme.color}">${theme.icon} ${theme.name}</span>
               <span>📍 ${r.city}</span>
               <span>📝 ${r.notes_count || 0}篇笔记</span>
+              <span>📸 ${r.photos_count || 0}张照片</span>
               <span>👤 ${r.creator?.username}</span>
             </div>
             ${hasRating ? `
@@ -642,6 +646,9 @@ async function loadMyPlans() {
   const ratingsStatsRes = await api(`${API}/users/${currentUser.id}/ratings-stats`);
   const ratingsStats = ratingsStatsRes.success ? ratingsStatsRes.stats : null;
   
+  const photosStatsRes = await api(`${API}/users/${currentUser.id}/photos-stats`);
+  const photosStats = photosStatsRes.success ? photosStatsRes.stats : null;
+  
   const res = await api(`${API}/users/${currentUser.id}/plans`);
   const grid = document.getElementById('myPlansGrid');
   
@@ -650,6 +657,7 @@ async function loadMyPlans() {
   document.getElementById('profileBio').textContent = currentUser.bio || '这个人很懒，没有留下签名';
   document.getElementById('profileCity').textContent = '📍 ' + (currentUser.city || '未知城市');
   document.getElementById('statPlans').textContent = res.success ? res.plans.length : 0;
+  document.getElementById('statPhotos').textContent = photosStats ? photosStats.photos_count : 0;
   document.getElementById('statFavorites').textContent = favRes.success ? favRes.favorites.length : 0;
   
   const followingRes = await api(`${API}/users/${currentUser.id}/following`);
@@ -1035,11 +1043,38 @@ async function openPlanDetail(planId) {
       </div>
 
       <div class="detail-section">
-        <h3>✨ 路线笔记 (${plan.notes?.length || 0})
-          ${canAddNote ? `<button class="btn btn-primary" style="margin-left:auto;font-size:12px;padding:6px 14px;" 
-                  onclick="openNoteModal(${plan.id})">＋ 添加笔记</button>` : ''}
-        </h3>
-        <div class="notes-list">${notesHtml}</div>
+        <div class="detail-tabs">
+          <div class="detail-tab ${currentDetailTab === 'notes' ? 'active' : ''}" data-tab="notes" onclick="switchDetailTab('notes')">
+            ✨ 路线笔记 (${plan.notes?.length || 0})
+          </div>
+          <div class="detail-tab ${currentDetailTab === 'photos' ? 'active' : ''}" data-tab="photos" onclick="switchDetailTab('photos')">
+            📸 照片墙 (<span id="photoCount">0</span>)
+          </div>
+        </div>
+        
+        <div id="notesTabContent" class="tab-content ${currentDetailTab === 'notes' ? 'active' : ''}" style="display: ${currentDetailTab === 'notes' ? 'block' : 'none'};">
+          <div style="display:flex;align-items:center;margin-bottom:16px;">
+            <h3 style="margin:0;">路线笔记</h3>
+            ${canAddNote ? `<button class="btn btn-primary" style="margin-left:auto;font-size:12px;padding:6px 14px;" 
+                    onclick="openNoteModal(${plan.id})">＋ 添加笔记</button>` : ''}
+          </div>
+          <div class="notes-list">${notesHtml}</div>
+        </div>
+        
+        <div id="photosTabContent" class="tab-content ${currentDetailTab === 'photos' ? 'active' : ''}" style="display: ${currentDetailTab === 'photos' ? 'block' : 'none'};">
+          <div style="display:flex;align-items:center;margin-bottom:16px;">
+            <h3 style="margin:0;">照片墙</h3>
+            ${isJoined && currentUser ? `<button class="btn btn-primary" style="margin-left:auto;font-size:12px;padding:6px 14px;" 
+                    onclick="openUploadPhotoModal(${plan.id})">📷 上传照片</button>` : ''}
+          </div>
+          <div id="photosWallContainer">
+            <div class="empty-state" style="padding: 30px;">
+              <div class="empty-state-icon" style="font-size:48px;">📸</div>
+              <h3>暂无照片</h3>
+              <p>${isJoined ? '点击上方按钮上传你的Citywalk精彩瞬间吧！' : '加入活动后即可上传照片'}</p>
+            </div>
+          </div>
+        </div>
       </div>
       
       <div class="detail-section">
@@ -1093,6 +1128,11 @@ async function openPlanDetail(planId) {
       toggleFollow(userId, btn);
     });
   });
+
+  currentDetailPlanId = planId;
+  if (currentDetailTab === 'photos') {
+    loadPlanPhotos(planId);
+  }
 }
 
 async function joinPlan(planId) {
@@ -1139,6 +1179,166 @@ async function completePlan(planId) {
 
 function closeDetailModal() {
   document.getElementById('planDetailModal').classList.add('hidden');
+  currentDetailPlanId = null;
+  currentPlanPhotos = [];
+}
+
+function switchDetailTab(tab) {
+  currentDetailTab = tab;
+  document.querySelectorAll('.detail-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.tab === tab);
+  });
+  document.getElementById('notesTabContent').style.display = tab === 'notes' ? 'block' : 'none';
+  document.getElementById('photosTabContent').style.display = tab === 'photos' ? 'block' : 'none';
+  
+  if (tab === 'photos' && currentDetailPlanId) {
+    loadPlanPhotos(currentDetailPlanId);
+  }
+}
+
+async function loadPlanPhotos(planId) {
+  const params = new URLSearchParams();
+  if (currentUser) params.set('user_id', currentUser.id);
+  
+  const res = await api(`${API}/plans/${planId}/photos?${params}`);
+  if (res.success) {
+    currentPlanPhotos = res.photos;
+    document.getElementById('photoCount').textContent = res.total || 0;
+    renderPhotoWall(res.photos);
+  }
+}
+
+function renderPhotoWall(photos) {
+  const container = document.getElementById('photosWallContainer');
+  if (!photos || photos.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state" style="padding: 30px;">
+        <div class="empty-state-icon" style="font-size:48px;">📸</div>
+        <h3>暂无照片</h3>
+        <p>上传你的Citywalk精彩瞬间吧！</p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="photo-wall-grid">
+      ${photos.map(ph => {
+        const isMyPhoto = currentUser && ph.user_id === currentUser.id;
+        return `
+          <div class="photo-wall-item" data-photo-id="${ph.id}">
+            <div class="photo-wall-image">
+              <img src="${ph.image_url}" alt="活动照片" onerror="this.src='https://picsum.photos/400/300?random=${ph.id}'">
+            </div>
+            ${ph.caption ? `<div class="photo-wall-caption">${ph.caption}</div>` : ''}
+            <div class="photo-wall-footer">
+              <div class="photo-wall-author">
+                <span class="photo-wall-avatar">${ph.author_avatar || '👤'}</span>
+                <span class="photo-wall-name">${ph.author_name}</span>
+                ${ph.location ? `<span class="photo-wall-location">📍 ${ph.location}</span>` : ''}
+              </div>
+              <div class="photo-wall-actions">
+                <span class="photo-like-btn ${ph.is_liked ? 'liked' : ''}" 
+                      onclick="event.stopPropagation(); likePhoto(${ph.id}, this)">
+                  ${ph.is_liked ? '❤️' : '🤍'} <span class="likes-count">${ph.likes || 0}</span>
+                </span>
+                ${isMyPhoto ? `
+                  <span class="photo-delete-btn" onclick="event.stopPropagation(); deletePhoto(${ph.id})">
+                    🗑️
+                  </span>
+                ` : ''}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+function openUploadPhotoModal(planId) {
+  document.getElementById('uploadPhotoPlanId').value = planId;
+  document.getElementById('uploadPhotoUrl').value = '';
+  document.getElementById('uploadPhotoCaption').value = '';
+  document.getElementById('uploadPhotoLocation').value = '';
+  document.getElementById('uploadPhotoModal').classList.remove('hidden');
+}
+
+function closeUploadPhotoModal() {
+  document.getElementById('uploadPhotoModal').classList.add('hidden');
+}
+
+async function uploadPhoto() {
+  const planId = document.getElementById('uploadPhotoPlanId').value;
+  const imageUrl = document.getElementById('uploadPhotoUrl').value.trim();
+  const caption = document.getElementById('uploadPhotoCaption').value.trim();
+  const location = document.getElementById('uploadPhotoLocation').value.trim();
+
+  if (!imageUrl) {
+    showToast('请输入照片链接', 'error');
+    return;
+  }
+
+  const res = await api(`${API}/photos`, {
+    method: 'POST',
+    body: JSON.stringify({
+      plan_id: planId,
+      user_id: currentUser.id,
+      image_url: imageUrl,
+      caption: caption,
+      location: location
+    })
+  });
+
+  if (res.success) {
+    showToast('照片上传成功！✨', 'success');
+    closeUploadPhotoModal();
+    loadPlanPhotos(planId);
+  } else {
+    showToast(res.error || '上传失败', 'error');
+  }
+}
+
+async function likePhoto(photoId, btn) {
+  if (!currentUser) {
+    showToast('请先登录', 'error');
+    return;
+  }
+
+  const res = await api(`${API}/photos/${photoId}/like`, {
+    method: 'POST',
+    body: JSON.stringify({ user_id: currentUser.id })
+  });
+
+  if (res.success) {
+    const countSpan = btn.querySelector('.likes-count');
+    if (countSpan) countSpan.textContent = res.likes;
+    if (res.is_liked) {
+      btn.classList.add('liked');
+      btn.innerHTML = `❤️ <span class="likes-count">${res.likes}</span>`;
+    } else {
+      btn.classList.remove('liked');
+      btn.innerHTML = `🤍 <span class="likes-count">${res.likes}</span>`;
+    }
+  }
+}
+
+async function deletePhoto(photoId) {
+  if (!confirm('确定要删除这张照片吗？')) return;
+
+  const res = await api(`${API}/photos/${photoId}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ user_id: currentUser.id })
+  });
+
+  if (res.success) {
+    showToast('照片已删除', 'info');
+    if (currentDetailPlanId) {
+      loadPlanPhotos(currentDetailPlanId);
+    }
+  } else {
+    showToast(res.error || '删除失败', 'error');
+  }
 }
 
 function renderChangesSummary(update) {

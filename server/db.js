@@ -21,6 +21,8 @@ const defaultData = {
   feeds: [],
   plan_updates: [],
   route_templates: [],
+  photos: [],
+  photo_likes: [],
   counters: {
     users: 0,
     plans: 0,
@@ -33,7 +35,9 @@ const defaultData = {
     follows: 0,
     feeds: 0,
     plan_updates: 0,
-    route_templates: 0
+    route_templates: 0,
+    photos: 0,
+    photo_likes: 0
   }
 };
 
@@ -175,6 +179,8 @@ function resolveTableName(fromPart) {
     'activity_feeds': 'feeds',
     'plan_updates': 'plan_updates',
     'route_templates': 'route_templates',
+    'activity_photos': 'photos',
+    'photo_likes': 'photo_likes',
     'p': 'plans',
     'pp': 'participants',
     'n': 'notes',
@@ -185,10 +191,12 @@ function resolveTableName(fromPart) {
     'fl': 'follows',
     'fd': 'feeds',
     'pu': 'plan_updates',
-    'rt': 'route_templates'
+    'rt': 'route_templates',
+    'ph': 'photos',
+    'pl': 'photo_likes'
   };
   
-  const primaryMatch = fromPart.match(/^(citywalk_plans|plan_participants|route_notes|favorite_routes|note_comments|user_notifications|plan_ratings|users|user_follows|activity_feeds|plan_updates|route_templates)\s+(\w+)/i);
+  const primaryMatch = fromPart.match(/^(citywalk_plans|plan_participants|route_notes|favorite_routes|note_comments|user_notifications|plan_ratings|users|user_follows|activity_feeds|plan_updates|route_templates|activity_photos|photo_likes)\s+(\w+)/i);
   if (primaryMatch) {
     return { mainTable: tables[primaryMatch[1].toLowerCase()], mainAlias: primaryMatch[2].toLowerCase() };
   }
@@ -210,8 +218,8 @@ function handleSelect(query, args) {
   const { mainTable, mainAlias } = fromMatch ? resolveTableName(fromMatch[1].trim()) : { mainTable: 'plans', mainAlias: null };
   let mainData = db[mainTable] || [];
   
-  const joinMatches = [...query.matchAll(/LEFT\s+JOIN\s+(citywalk_plans|plan_participants|route_notes|favorite_routes|note_comments|user_notifications|plan_ratings|users|user_follows|activity_feeds|plan_updates|route_templates)\s+(\w+)\s+ON\s+([\w.]+)\s*=\s*([\w.]+)/gi)];
-  const tableMap = { citywalk_plans: 'plans', plan_participants: 'participants', route_notes: 'notes', favorite_routes: 'favorites', note_comments: 'comments', user_notifications: 'notifications', plan_ratings: 'ratings', users: 'users', user_follows: 'follows', activity_feeds: 'feeds', plan_updates: 'plan_updates', route_templates: 'route_templates' };
+  const joinMatches = [...query.matchAll(/LEFT\s+JOIN\s+(citywalk_plans|plan_participants|route_notes|favorite_routes|note_comments|user_notifications|plan_ratings|users|user_follows|activity_feeds|plan_updates|route_templates|activity_photos|photo_likes)\s+(\w+)\s+ON\s+([\w.]+)\s*=\s*([\w.]+)/gi)];
+  const tableMap = { citywalk_plans: 'plans', plan_participants: 'participants', route_notes: 'notes', favorite_routes: 'favorites', note_comments: 'comments', user_notifications: 'notifications', plan_ratings: 'ratings', users: 'users', user_follows: 'follows', activity_feeds: 'feeds', plan_updates: 'plan_updates', route_templates: 'route_templates', activity_photos: 'photos', photo_likes: 'photo_likes' };
   const joins = joinMatches.map(m => ({
     table: tableMap[m[1].toLowerCase()],
     alias: m[2].toLowerCase(),
@@ -316,15 +324,21 @@ function handleSelect(query, args) {
     result = result.slice(offset, offset + limit);
   }
   
+  const countMatch = query.match(/SELECT\s+COUNT\(\*\)\s+AS\s+(\w+)/i) || query.match(/SELECT\s+COUNT\((\w+)\)\s+AS\s+(\w+)/i);
+  if (countMatch && !groupMatch) {
+    const alias = countMatch[2] || countMatch[1] || 'count';
+    return [{ [alias]: result.length }];
+  }
+  
   return result;
 }
 
 function handleInsert(query, args) {
-  const tableMatch = query.match(/INSERT\s+(?:OR\s+IGNORE\s+)?INTO\s+(citywalk_plans|plan_participants|route_notes|favorite_routes|note_comments|user_notifications|plan_ratings|users|user_follows|activity_feeds|plan_updates|route_templates)/i);
+  const tableMatch = query.match(/INSERT\s+(?:OR\s+IGNORE\s+)?INTO\s+(citywalk_plans|plan_participants|route_notes|favorite_routes|note_comments|user_notifications|plan_ratings|users|user_follows|activity_feeds|plan_updates|route_templates|activity_photos|photo_likes)/i);
   if (!tableMatch) return null;
   
   const tableName = tableMatch[1].toLowerCase();
-  const table = ({ citywalk_plans: 'plans', plan_participants: 'participants', route_notes: 'notes', favorite_routes: 'favorites', note_comments: 'comments', user_notifications: 'notifications', plan_ratings: 'ratings', users: 'users', user_follows: 'follows', activity_feeds: 'feeds', plan_updates: 'plan_updates', route_templates: 'route_templates' })[tableName];
+  const table = ({ citywalk_plans: 'plans', plan_participants: 'participants', route_notes: 'notes', favorite_routes: 'favorites', note_comments: 'comments', user_notifications: 'notifications', plan_ratings: 'ratings', users: 'users', user_follows: 'follows', activity_feeds: 'feeds', plan_updates: 'plan_updates', route_templates: 'route_templates', activity_photos: 'photos', photo_likes: 'photo_likes' })[tableName];
   
   const fieldsMatch = query.match(/\(([^)]+)\)\s*VALUES/i);
   if (!fieldsMatch) return null;
@@ -374,11 +388,11 @@ function handleInsert(query, args) {
 }
 
 function handleUpdate(query, args) {
-  const tableMatch = query.match(/UPDATE\s+(citywalk_plans|plan_participants|route_notes|favorite_routes|note_comments|user_notifications|plan_ratings|users|user_follows|activity_feeds|plan_updates|route_templates)/i);
+  const tableMatch = query.match(/UPDATE\s+(citywalk_plans|plan_participants|route_notes|favorite_routes|note_comments|user_notifications|plan_ratings|users|user_follows|activity_feeds|plan_updates|route_templates|activity_photos|photo_likes)/i);
   if (!tableMatch) return null;
   
   const tableName = tableMatch[1].toLowerCase();
-  const table = ({ citywalk_plans: 'plans', plan_participants: 'participants', route_notes: 'notes', favorite_routes: 'favorites', note_comments: 'comments', user_notifications: 'notifications', plan_ratings: 'ratings', users: 'users', user_follows: 'follows', activity_feeds: 'feeds', plan_updates: 'plan_updates', route_templates: 'route_templates' })[tableName];
+  const table = ({ citywalk_plans: 'plans', plan_participants: 'participants', route_notes: 'notes', favorite_routes: 'favorites', note_comments: 'comments', user_notifications: 'notifications', plan_ratings: 'ratings', users: 'users', user_follows: 'follows', activity_feeds: 'feeds', plan_updates: 'plan_updates', route_templates: 'route_templates', activity_photos: 'photos', photo_likes: 'photo_likes' })[tableName];
   
   const setMatch = query.match(/SET\s+(.+?)(?:WHERE|$)/i);
   if (!setMatch) return null;
@@ -463,11 +477,11 @@ function handleUpdate(query, args) {
 }
 
 function handleDelete(query, args) {
-  const tableMatch = query.match(/DELETE\s+FROM\s+(citywalk_plans|plan_participants|route_notes|favorite_routes|note_comments|user_notifications|plan_ratings|users|user_follows|activity_feeds|plan_updates|route_templates)/i);
+  const tableMatch = query.match(/DELETE\s+FROM\s+(citywalk_plans|plan_participants|route_notes|favorite_routes|note_comments|user_notifications|plan_ratings|users|user_follows|activity_feeds|plan_updates|route_templates|activity_photos|photo_likes)/i);
   if (!tableMatch) return 0;
   
   const tableName = tableMatch[1].toLowerCase();
-  const table = ({ citywalk_plans: 'plans', plan_participants: 'participants', route_notes: 'notes', favorite_routes: 'favorites', note_comments: 'comments', user_notifications: 'notifications', plan_ratings: 'ratings', users: 'users', user_follows: 'follows', activity_feeds: 'feeds', plan_updates: 'plan_updates', route_templates: 'route_templates' })[tableName];
+  const table = ({ citywalk_plans: 'plans', plan_participants: 'participants', route_notes: 'notes', favorite_routes: 'favorites', note_comments: 'comments', user_notifications: 'notifications', plan_ratings: 'ratings', users: 'users', user_follows: 'follows', activity_feeds: 'feeds', plan_updates: 'plan_updates', route_templates: 'route_templates', activity_photos: 'photos', photo_likes: 'photo_likes' })[tableName];
   
   const whereMatch = query.match(/WHERE\s+(.+)$/i);
   let argIndex = 0;
