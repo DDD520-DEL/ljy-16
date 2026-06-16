@@ -49,10 +49,10 @@ app.get('/api/users/:id', (req, res) => {
     if (!user) {
       return res.status(404).json({ error: '用户不存在' });
     }
-    const followingCount = db.prepare('SELECT COUNT(*) as count FROM user_follows WHERE follower_id = ?').get(req.params.id);
-    const followersCount = db.prepare('SELECT COUNT(*) as count FROM user_follows WHERE following_id = ?').get(req.params.id);
-    user.following_count = followingCount ? Object.values(followingCount)[0] : 0;
-    user.followers_count = followersCount ? Object.values(followersCount)[0] : 0;
+    const followingCount = db.prepare('SELECT * FROM user_follows WHERE follower_id = ?').all(req.params.id).length;
+    const followersCount = db.prepare('SELECT * FROM user_follows WHERE following_id = ?').all(req.params.id).length;
+    user.following_count = followingCount;
+    user.followers_count = followersCount;
     res.json({ success: true, user });
   } catch (err) {
     res.status(500).json({ error: err.message });

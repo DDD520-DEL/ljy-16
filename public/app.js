@@ -2633,6 +2633,7 @@ async function toggleProfileFollow(userId, btn) {
   if (res.success) {
     const followingCountEl = btn.closest('.user-profile-body').querySelector('.user-profile-stat:nth-child(1) .user-profile-stat-num');
     const followersCountEl = btn.closest('.user-profile-body').querySelector('.user-profile-stat:nth-child(2) .user-profile-stat-num');
+    if (followingCountEl) followingCountEl.textContent = res.user.following_count || 0;
     if (followersCountEl) followersCountEl.textContent = res.user.followers_count || 0;
   }
   const activeTab = document.querySelector('.nav-btn.active')?.dataset.tab;
