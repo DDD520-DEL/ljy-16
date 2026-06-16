@@ -20,6 +20,7 @@ let currentDateTab = 'recruiting';
 let selectedDatePlans = [];
 let currentDetailTab = 'notes';
 let currentDetailPlanId = null;
+let currentDetailPlan = null;
 let searchHistoryVisible = false;
 let searchHistoryItems = [];
 let currentPlanPhotos = [];
@@ -848,6 +849,7 @@ async function openPlanDetail(planId) {
   }
   
   const plan = res.plan;
+  currentDetailPlan = plan;
   const theme = getThemeInfo(plan.theme);
   const status = getStatusLabel(plan.status);
   const isJoined = plan.participants?.some(p => p.id === currentUser?.id);
@@ -1202,6 +1204,7 @@ async function completePlan(planId) {
 function closeDetailModal() {
   document.getElementById('planDetailModal').classList.add('hidden');
   currentDetailPlanId = null;
+  currentDetailPlan = null;
   currentPlanPhotos = [];
 }
 
@@ -3569,7 +3572,11 @@ function renderGuideTabEmpty(planId) {
 }
 
 function isPlanParticipantLocal(planId) {
-  return true;
+  if (!currentUser || !currentDetailPlan || Number(currentDetailPlan.id) !== Number(planId)) {
+    return false;
+  }
+  const participants = currentDetailPlan.participants || [];
+  return participants.some(p => Number(p.id) === Number(currentUser.id));
 }
 
 async function openGuideEditor(planId) {
@@ -3817,7 +3824,10 @@ async function deleteCheckinPoint(pointId) {
   if (!confirm('确定删除这个打卡点吗？')) return;
   
   try {
-    await api(`${API}/guides/points/${pointId}`, { method: 'DELETE' });
+    await api(`${API}/guides/points/${pointId}`, { 
+      method: 'DELETE',
+      body: JSON.stringify({ user_id: currentUser.id })
+    });
     currentCheckinPoints = currentCheckinPoints.filter(p => p.id !== pointId);
     renderGuideEditor();
     showToast('删除成功', 'success');
@@ -3977,6 +3987,51 @@ async function openShareGenerator() {
   
   await loadSharePhotos();
   document.getElementById('shareGeneratorModal').classList.remove('hidden');
+}
+
+async function loadSharePhotos() {
+  const container = document.getElementById('sharePhotosSelector');
+  if (!container || !currentGuidePlanId) return;
+  
+  try {
+    const params = new URLSearchParams();
+    if (currentUser) params.set('user_id', currentUser.id);
+    
+    const res = await api(`${API}/plans/${currentGuidePlanId}/photos?${params}`);
+    if (res.success && res.photos.length > 0) {
+      container.innerHTML = res.photos.map(photo => `
+        <div class="share-photo-item ${selectedSharePhotos.includes(photo.id) ? 'selected' : ''}"
+             data-photo-id="${photo.id}"
+             onclick="toggleSharePhoto(${photo.id}, this)">
+          ${photo.image_url ? 
+            `<img src="${photo.image_url}" alt="照片">` : 
+            `<div class="share-photo-placeholder">📷</div>`
+          }
+          <div class="share-photo-check">✓</div>
+        </div>
+      `).join('');
+    } else {
+      container.innerHTML = `
+        <div class="empty-state" style="padding: 20px;">
+          <div class="empty-state-icon" style="font-size:32px;">📷</div>
+          <p style="font-size:14px;">暂无照片</p>
+        </div>
+      `;
+    }
+  } catch (e) {
+    container.innerHTML = '<p>加载照片失败</p>';
+  }
+}
+
+function toggleSharePhoto(photoId, el) {
+  const idx = selectedSharePhotos.indexOf(photoId);
+  if (idx === -1) {
+    selectedSharePhotos.push(photoId);
+    el.classList.add('selected');
+  } else {
+    selectedSharePhotos.splice(idx, 1);
+    el.classList.remove('selected');
+  }
 }
 
 function handleShareGenerateClick() {

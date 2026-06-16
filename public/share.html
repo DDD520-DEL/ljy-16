@@ -358,6 +358,12 @@
   <script>
     const API = '/api';
 
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
     async function api(url, options = {}) {
       const defaultOptions = {
         headers: {
@@ -493,12 +499,6 @@
           <p>${escapeHtml(message)}</p>
         </div>
       `;
-    }
-
-    function escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
     }
 
     document.addEventListener('DOMContentLoaded', loadSharePage);
