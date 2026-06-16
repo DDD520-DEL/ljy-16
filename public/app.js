@@ -123,7 +123,7 @@ function renderThemeFilter() {
     chip.addEventListener('click', () => {
       currentThemeFilter = chip.dataset.theme;
       renderThemeFilter();
-      loadDiscoverPlans();
+      refreshDiscoverView();
     });
   });
 }
@@ -257,10 +257,13 @@ async function loadDiscoverPlans() {
       </div>
     `;
   }
-  
+}
+
+function refreshDiscoverView() {
   if (currentView === 'calendar') {
-    calendarPlans = res.success ? res.plans : [];
-    renderCalendar();
+    loadCalendarData();
+  } else {
+    loadDiscoverPlans();
   }
 }
 
@@ -2257,7 +2260,7 @@ function refreshCurrentTab() {
   switch (activeTab) {
     case 'discover': 
       loadTimeline();
-      loadDiscoverPlans(); 
+      refreshDiscoverView(); 
       break;
     case 'match': loadMatchSuggestions(); break;
     case 'popular': loadPopularRoutes(); break;
@@ -2355,7 +2358,7 @@ async function initAppContent() {
     loadTimeline();
   }
   
-  loadDiscoverPlans();
+  refreshDiscoverView();
 }
 
 function openModal(modalId) {
@@ -2457,7 +2460,7 @@ function initEventListeners() {
 
   document.getElementById('filterCity').addEventListener('change', (e) => {
     currentCityFilter = e.target.value;
-    loadDiscoverPlans();
+    refreshDiscoverView();
   });
 
   let searchTimer;
@@ -2465,7 +2468,7 @@ function initEventListeners() {
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => {
       currentKeyword = e.target.value;
-      loadDiscoverPlans();
+      refreshDiscoverView();
     }, 300);
   });
 
