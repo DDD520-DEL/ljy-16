@@ -1,8 +1,10 @@
 const API = '/api';
 let currentUser = null;
 let themes = [];
+let difficultyLevels = [];
 let currentThemeFilter = '';
 let currentCityFilter = '';
+let currentDifficultyFilter = '';
 let currentKeyword = '';
 let favoriteIds = new Set();
 let currentNoteComments = [];
@@ -71,6 +73,21 @@ function getThemeInfo(themeId) {
   return t || { name: themeId, icon: '📍', color: '#999' };
 }
 
+function getDifficultyInfo(levelId) {
+  const d = difficultyLevels.find(d => d.id === levelId);
+  return d || { name: '中等强度', icon: '🚶', color: '#0984E3' };
+}
+
+function renderDifficultyBadge(levelId, options = {}) {
+  const d = getDifficultyInfo(levelId);
+  const size = options.size || 'normal';
+  const sizeClass = size === 'small' ? 'difficulty-badge-sm' : '';
+  return `<span class="difficulty-badge ${sizeClass}" style="background: ${d.color}15; color: ${d.color}; border-color: ${d.color}30">
+    <span>${d.icon}</span>
+    <span>${d.name}</span>
+  </span>`;
+}
+
 function getStatusLabel(status) {
   if (status === 'recruiting') return { text: '招募中', cls: 'status-recruiting' };
   if (status === 'completed') return { text: '已完成', cls: 'status-completed' };
@@ -134,6 +151,52 @@ function renderThemeFilter() {
   });
 }
 
+function renderDifficultyFilter() {
+  const container = document.getElementById('difficultyFilter');
+  if (!container) return;
+  
+  container.innerHTML = `<div class="difficulty-chip ${currentDifficultyFilter === '' ? 'active' : ''}" data-difficulty="">
+      <span>🎯</span>
+      <span>全部难度</span>
+    </div>` +
+    difficultyLevels.map(d => `
+      <div class="difficulty-chip ${currentDifficultyFilter === d.id ? 'active' : ''}" 
+           data-difficulty="${d.id}" 
+           style="color: ${d.color}; background: ${currentDifficultyFilter === d.id ? d.color + '15' : 'var(--bg)'}; border-color: ${currentDifficultyFilter === d.id ? d.color + '50' : 'var(--border)'}">
+        <span>${d.icon}</span>
+        <span>${d.name}</span>
+      </div>
+    `).join('');
+  
+  container.querySelectorAll('.difficulty-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      currentDifficultyFilter = chip.dataset.difficulty;
+      renderDifficultyFilter();
+      refreshDiscoverView();
+    });
+  });
+}
+
+function initDifficultySelector() {
+  const container = document.getElementById('planDifficulty');
+  if (!container) return;
+  
+  const updateSelection = (level) => {
+    container.querySelectorAll('.difficulty-option').forEach(opt => {
+      opt.classList.toggle('selected', opt.dataset.level === level);
+    });
+    document.getElementById('planDifficultyLevel').value = level;
+  };
+  
+  container.querySelectorAll('.difficulty-option').forEach(opt => {
+    opt.addEventListener('click', () => {
+      updateSelection(opt.dataset.level);
+    });
+  });
+  
+  updateSelection('medium');
+}
+
 async function populateCitySelects() {
   const res = await api(`${API}/cities`);
   if (res.success) {
@@ -192,8 +255,9 @@ function renderPlanCard(plan, options = {}) {
           <span>${theme.name}</span>
         </div>
         ${followedBadge}
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
           <span class="status-badge ${status.cls}">${status.text}</span>
+          ${renderDifficultyBadge(plan.difficulty_level, { size: 'small' })}
           ${options.showSpots && plan.status === 'recruiting' && spots > 0 ? 
             `<span class="match-spots">剩 ${spots} 个名额</span>` : ''}
         </div>
@@ -245,6 +309,7 @@ async function loadDiscoverPlans() {
   const params = new URLSearchParams();
   if (currentCityFilter) params.set('city', currentCityFilter);
   if (currentThemeFilter) params.set('theme', currentThemeFilter);
+  if (currentDifficultyFilter) params.set('difficulty', currentDifficultyFilter);
   if (currentKeyword) params.set('keyword', currentKeyword);
   if (currentUser) params.set('user_id', currentUser.id);
   
@@ -297,6 +362,7 @@ async function loadCalendarData() {
   const params = new URLSearchParams();
   if (currentCityFilter) params.set('city', currentCityFilter);
   if (currentThemeFilter) params.set('theme', currentThemeFilter);
+  if (currentDifficultyFilter) params.set('difficulty', currentDifficultyFilter);
   if (currentKeyword) params.set('keyword', currentKeyword);
   if (currentUser) params.set('user_id', currentUser.id);
   params.set('limit', '100');
@@ -478,9 +544,12 @@ function renderDateActivityList() {
           <div class="duration">${plan.duration_hours}小时</div>
         </div>
         <div class="date-activity-info">
-          <div class="date-activity-theme" style="background: ${theme.color}15; color: ${theme.color}">
-            <span>${theme.icon}</span>
-            <span>${theme.name}</span>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px;">
+            <div class="date-activity-theme" style="background: ${theme.color}15; color: ${theme.color}">
+              <span>${theme.icon}</span>
+              <span>${theme.name}</span>
+            </div>
+            ${renderDifficultyBadge(plan.difficulty_level, { size: 'small' })}
           </div>
           <div class="date-activity-title">${plan.title}</div>
           <div class="date-activity-meta">
@@ -956,6 +1025,7 @@ async function openPlanDetail(planId) {
               <span class="plan-theme-badge" style="background: ${theme.color}15; color: ${theme.color}">
                 ${theme.icon} ${theme.name}
               </span>
+              ${renderDifficultyBadge(plan.difficulty_level)}
               <span class="status-badge ${status.cls}">${status.text}</span>
               <button class="plan-favorite ${isFav ? 'active' : ''}" 
                       style="position:static;"
@@ -1008,6 +1078,10 @@ async function openPlanDetail(planId) {
           <div class="detail-meta-card">
             <div class="detail-meta-label">集合点</div>
             <div class="detail-meta-value">📍 ${plan.meeting_point || '待定'}</div>
+          </div>
+          <div class="detail-meta-card">
+            <div class="detail-meta-label">难度等级</div>
+            <div class="detail-meta-value">${renderDifficultyBadge(plan.difficulty_level)}</div>
           </div>
           <div class="detail-meta-card">
             <div class="detail-meta-label">创建者</div>
@@ -2567,7 +2641,8 @@ async function initCreatePlanForm() {
       duration_hours: parseFloat(document.getElementById('planDuration').value),
       max_participants: parseInt(document.getElementById('planMax').value),
       meeting_point: document.getElementById('planMeeting').value,
-      description: document.getElementById('planDescription').value
+      description: document.getElementById('planDescription').value,
+      difficulty_level: document.getElementById('planDifficultyLevel').value
     };
     
     const res = await api(`${API}/plans`, {
@@ -2579,6 +2654,7 @@ async function initCreatePlanForm() {
       showToast('计划发布成功！等待搭子加入吧 🎉', 'success');
       document.getElementById('createPlanModal').classList.add('hidden');
       e.target.reset();
+      initDifficultySelector();
       refreshCurrentTab();
     } else {
       showToast(res.error || '发布失败', 'error');
@@ -2590,9 +2666,14 @@ async function initAppContent() {
   const themesRes = await api(`${API}/themes`);
   if (themesRes.success) themes = themesRes.themes;
   
+  const difficultyRes = await api(`${API}/difficulty-levels`);
+  if (difficultyRes.success) difficultyLevels = difficultyRes.levels;
+  
   await populateCitySelects();
   await populateThemeSelects();
   renderThemeFilter();
+  renderDifficultyFilter();
+  initDifficultySelector();
   initTimelineFilter();
   
   if (currentUser) {
@@ -2636,9 +2717,13 @@ function initEventListeners() {
 
   document.getElementById('closeCreateBtn').addEventListener('click', () => {
     document.getElementById('createPlanModal').classList.add('hidden');
+    document.getElementById('createPlanForm').reset();
+    initDifficultySelector();
   });
   document.getElementById('cancelCreateBtn').addEventListener('click', () => {
     document.getElementById('createPlanModal').classList.add('hidden');
+    document.getElementById('createPlanForm').reset();
+    initDifficultySelector();
   });
 
   document.getElementById('closeDetailBtn').addEventListener('click', closeDetailModal);

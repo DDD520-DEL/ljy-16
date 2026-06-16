@@ -133,6 +133,10 @@
               <label>主题</label>
               <div id="themeFilter" class="theme-chips"></div>
             </div>
+            <div class="filter-group">
+              <label>难度</label>
+              <div id="difficultyFilter" class="difficulty-chips"></div>
+            </div>
             <div class="filter-group search-group">
               <input type="text" id="searchKeyword" placeholder="🔍 搜索路线标题或描述">
             </div>
@@ -337,6 +341,27 @@
             <div class="form-group">
               <label>人数上限</label>
               <input type="number" id="planMax" value="6" min="2" max="50">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>难度等级 *</label>
+            <div class="difficulty-selector" id="planDifficulty">
+              <div class="difficulty-option" data-level="easy">
+                <span class="difficulty-icon">🌿</span>
+                <span class="difficulty-name">轻松漫步</span>
+                <span class="difficulty-desc">适合休闲散步</span>
+              </div>
+              <div class="difficulty-option" data-level="medium">
+                <span class="difficulty-icon">🚶</span>
+                <span class="difficulty-name">中等强度</span>
+                <span class="difficulty-desc">需要一定体力</span>
+              </div>
+              <div class="difficulty-option" data-level="hard">
+                <span class="difficulty-icon">🔥</span>
+                <span class="difficulty-name">硬核暴走</span>
+                <span class="difficulty-desc">挑战身体极限</span>
+              </div>
+              <input type="hidden" id="planDifficultyLevel" value="medium">
             </div>
           </div>
           <div class="form-group">

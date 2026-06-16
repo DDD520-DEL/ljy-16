@@ -13,6 +13,21 @@ const themes = {
   food: '小吃寻味'
 };
 
+const difficultyMapping = {
+  '法租界老洋房深度游': 'medium',
+  '静安寺菜市场寻宝之旅': 'easy',
+  '苏州河上的天桥秘境': 'medium',
+  '田子坊弄堂美食巡礼': 'easy',
+  '永康路咖啡一条街漫游': 'easy',
+  '798艺术区街头艺术探索': 'hard',
+  '南锣鼓巷胡同深度游': 'medium',
+  '宽窄巷子文艺漫步': 'easy',
+  '建设路小吃一条街扫荡': 'medium',
+  '西湖断桥至苏堤春晓': 'hard',
+  '西安城墙夜跑徒步': 'hard',
+  '城隍庙夜市美食探索': 'easy'
+};
+
 function seedData() {
   console.log('🌱 开始初始化数据...');
 
@@ -123,8 +138,8 @@ function seedData() {
   const insertPlan = db.prepare(`
     INSERT INTO citywalk_plans 
     (creator_id, title, theme, city, description, start_time, duration_hours, 
-     max_participants, current_participants, meeting_point, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     max_participants, current_participants, meeting_point, status, difficulty_level)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const insertParticipant = db.prepare(`
@@ -133,9 +148,10 @@ function seedData() {
 
   const planIds = [];
   plans.forEach((p, idx) => {
+    const difficulty = difficultyMapping[p.title] || 'medium';
     const result = insertPlan.run(
       p.creator_id, p.title, p.theme, p.city, p.description, p.start_time,
-      p.duration_hours, p.max_participants, 1, p.meeting_point, p.status
+      p.duration_hours, p.max_participants, 1, p.meeting_point, p.status, difficulty
     );
     const planId = result.lastInsertRowid;
     p.id = planId;

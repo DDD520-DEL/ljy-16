@@ -5,7 +5,7 @@ const path = require('path');
 const db = require('./db');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(bodyParser.json({ limit: '10mb' }));
@@ -43,6 +43,15 @@ app.post('/api/users/login', (req, res) => {
   }
 });
 
+app.get('/api/difficulty-levels', (req, res) => {
+  try {
+    const levels = db.prepare('SELECT * FROM difficulty_levels').all();
+    res.json({ success: true, levels });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/users/:id', (req, res) => {
   try {
     const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
@@ -64,23 +73,26 @@ app.post('/api/plans', (req, res) => {
     const {
       creator_id, title, theme, city, description,
       start_time, duration_hours, max_participants,
-      meeting_point, route_points
+      meeting_point, route_points, difficulty_level
     } = req.body;
 
     if (!creator_id || !title || !theme || !city || !start_time) {
       return res.status(400).json({ error: '缺少必填字段' });
     }
 
+    const validLevels = ['easy', 'medium', 'hard'];
+    const difficulty = validLevels.includes(difficulty_level) ? difficulty_level : 'medium';
+
     const stmt = db.prepare(`
       INSERT INTO citywalk_plans 
       (creator_id, title, theme, city, description, start_time, 
-       duration_hours, max_participants, meeting_point, route_points)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       duration_hours, max_participants, meeting_point, route_points, difficulty_level)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const result = stmt.run(
       creator_id, title, theme, city, description || '',
       start_time, duration_hours || 3, max_participants || 6,
-      meeting_point || '', route_points || ''
+      meeting_point || '', route_points || '', difficulty
     );
 
     const participantStmt = db.prepare(`
@@ -107,7 +119,7 @@ app.post('/api/plans', (req, res) => {
 
 app.get('/api/plans', (req, res) => {
   try {
-    const { city, theme, status, keyword, user_id, page = 1, limit = 20 } = req.query;
+    const { city, theme, status, keyword, user_id, difficulty, page = 1, limit = 20 } = req.query;
     let sql = `SELECT p.*, u.username as creator_name, u.avatar as creator_avatar 
                FROM citywalk_plans p 
                LEFT JOIN users u ON p.creator_id = u.id 
@@ -125,6 +137,10 @@ app.get('/api/plans', (req, res) => {
     if (status) {
       sql += ' AND p.status = ?';
       params.push(status);
+    }
+    if (difficulty) {
+      sql += ' AND p.difficulty_level = ?';
+      params.push(difficulty);
     }
     if (keyword) {
       sql += ' AND (p.title LIKE ? OR p.description LIKE ?)';
@@ -758,7 +774,7 @@ app.get('/api/users/:id/pending-ratings', (req, res) => {
 
 app.get('/api/match/suggestions', (req, res) => {
   try {
-    const { user_id, city, theme } = req.query;
+    const { user_id, city, theme, difficulty } = req.query;
     let sql = `
       SELECT p.*, u.username as creator_name, u.avatar as creator_avatar,
              (p.max_participants - p.current_participants) as spots_left
@@ -775,6 +791,10 @@ app.get('/api/match/suggestions', (req, res) => {
     if (theme) {
       sql += ' AND p.theme = ?';
       params.push(theme);
+    }
+    if (difficulty) {
+      sql += ' AND p.difficulty_level = ?';
+      params.push(difficulty);
     }
     if (user_id) {
       sql += ' AND p.creator_id != ? AND p.id NOT IN (SELECT plan_id FROM plan_participants WHERE user_id = ?)';
@@ -833,7 +853,7 @@ app.get('/api/match/suggestions', (req, res) => {
 
 app.get('/api/routes/popular', (req, res) => {
   try {
-    const { city, theme, limit = 10, user_id } = req.query;
+    const { city, theme, difficulty, limit = 10, user_id } = req.query;
     let sql = `
       SELECT p.*, u.username as creator_name, u.avatar as creator_avatar,
              p.current_participants as popularity,
@@ -853,6 +873,10 @@ app.get('/api/routes/popular', (req, res) => {
     if (theme) {
       sql += ' AND p.theme = ?';
       params.push(theme);
+    }
+    if (difficulty) {
+      sql += ' AND p.difficulty_level = ?';
+      params.push(difficulty);
     }
 
     sql += ' GROUP BY p.id';
