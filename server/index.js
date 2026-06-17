@@ -3332,6 +3332,102 @@ function initBadges() {
   console.log(`🏆 已创建 ${badges.length} 个成就徽章`);
 }
 
+app.get('/api/plans/:id/messages', (req, res) => {
+  try {
+    const planId = req.params.id;
+
+    const plan = db.prepare('SELECT * FROM citywalk_plans WHERE id = ?').get(planId);
+    if (!plan) {
+      return res.status(404).json({ error: '计划不存在' });
+    }
+
+    const messages = db.prepare(`
+      SELECT pm.*, u.username as sender_name, u.avatar as sender_avatar
+      FROM plan_messages pm
+      LEFT JOIN users u ON pm.sender_id = u.id
+      WHERE pm.plan_id = ?
+      ORDER BY pm.created_at ASC
+    `).all(planId).map(m => ({
+      id: m.id,
+      plan_id: m.plan_id,
+      sender_id: m.sender_id,
+      sender_name: m.sender_name || m.u_username || '匿名用户',
+      sender_avatar: m.sender_avatar || m.u_avatar || '👤',
+      content: m.content,
+      created_at: m.created_at
+    }));
+
+    res.json({ success: true, messages });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/plans/:id/messages', (req, res) => {
+  try {
+    const planId = req.params.id;
+    const { user_id, content } = req.body;
+
+    if (!user_id) {
+      return res.status(400).json({ error: '缺少用户ID' });
+    }
+    if (!content || !content.trim()) {
+      return res.status(400).json({ error: '消息内容不能为空' });
+    }
+    if (content.trim().length > 500) {
+      return res.status(400).json({ error: '消息内容不能超过500字' });
+    }
+
+    const plan = db.prepare('SELECT * FROM citywalk_plans WHERE id = ?').get(planId);
+    if (!plan) {
+      return res.status(404).json({ error: '计划不存在' });
+    }
+
+    const participant = db.prepare('SELECT * FROM plan_participants WHERE plan_id = ? AND user_id = ?').get(planId, user_id);
+    if (!participant) {
+      return res.status(403).json({ error: '只有参与者才能发送消息' });
+    }
+
+    const stmt = db.prepare(`
+      INSERT INTO plan_messages (plan_id, sender_id, content) VALUES (?, ?, ?)
+    `);
+    const result = stmt.run(planId, user_id, content.trim());
+
+    const message = db.prepare(`
+      SELECT pm.*, u.username as sender_name, u.avatar as sender_avatar
+      FROM plan_messages pm
+      LEFT JOIN users u ON pm.sender_id = u.id
+      WHERE pm.id = ?
+    `).get(result.lastInsertRowid);
+
+    const responseMsg = {
+      id: message.id,
+      plan_id: message.plan_id,
+      sender_id: message.sender_id,
+      sender_name: message.sender_name || message.u_username || '匿名用户',
+      sender_avatar: message.sender_avatar || message.u_avatar || '👤',
+      content: message.content,
+      created_at: message.created_at
+    };
+
+    db.transaction(() => {
+      const participants = db.prepare('SELECT user_id FROM plan_participants WHERE plan_id = ? AND user_id != ?').all(planId, user_id);
+      const notifStmt = db.prepare(`
+        INSERT INTO user_notifications (user_id, type, content, related_id, related_type, from_user_id, is_read)
+        VALUES (?, 'plan_message', ?, ?, 'plan', ?, 0)
+      `);
+      const senderName = responseMsg.sender_name;
+      participants.forEach(p => {
+        notifStmt.run(p.user_id, `${senderName}：${content.trim().slice(0, 30)}`, planId, user_id);
+      });
+    });
+
+    res.json({ success: true, message: responseMsg });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 initBadges();
 
 app.listen(PORT, () => {

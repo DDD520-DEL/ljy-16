@@ -26,6 +26,9 @@ let currentDetailPlan = null;
 let searchHistoryVisible = false;
 let searchHistoryItems = [];
 let currentPlanPhotos = [];
+let currentPlanMessages = [];
+let messagePollingTimer = null;
+let lastMessageTimestamp = null;
 
 const avatarPool = ['🧑', '👩', '👨', '👧', '👦', '🧔', '👵', '👴', '🧑‍🎨', '👨‍🍳', '👩‍💻', '🧑‍🚀', '🎨', '📷', '🎭', '🎵'];
 
@@ -1018,8 +1021,8 @@ async function openPlanDetail(planId) {
   currentDetailPlan = plan;
   const theme = getThemeInfo(plan.theme);
   const status = getStatusLabel(plan.status);
-  const isJoined = plan.participants?.some(p => p.id === currentUser?.id);
-  const isCreator = plan.creator_id === currentUser?.id;
+  const isJoined = plan.participants?.some(p => Number(p.id) === Number(currentUser?.id));
+  const isCreator = Number(plan.creator_id) === Number(currentUser?.id);
   const isFull = plan.current_participants >= plan.max_participants;
   const isFav = favoriteIds.has(plan.id);
   const canAddNote = (plan.status === 'completed' || isJoined) && currentUser;
@@ -1040,7 +1043,7 @@ async function openPlanDetail(planId) {
   const startTime = new Date(plan.start_time);
   const diffMinutes = (now - startTime) / (1000 * 60);
   const canCheckin = isJoined && diffMinutes >= -30 && diffMinutes <= 30 && plan.status !== 'cancelled';
-  const myParticipant = plan.participants?.find(p => p.id === currentUser?.id);
+  const myParticipant = plan.participants?.find(p => Number(p.id) === Number(currentUser?.id));
   const hasCheckedIn = myParticipant?.is_checked_in || false;
   const checkinTimeBefore = new Date(startTime.getTime() - 30 * 60 * 1000);
   const checkinTimeAfter = new Date(startTime.getTime() + 30 * 60 * 1000);
@@ -1271,6 +1274,9 @@ async function openPlanDetail(planId) {
           <div class="detail-tab ${currentDetailTab === 'notes' ? 'active' : ''}" data-tab="notes" onclick="switchDetailTab('notes')">
             ✨ 路线笔记 (${plan.notes?.length || 0})
           </div>
+          <div class="detail-tab ${currentDetailTab === 'messages' ? 'active' : ''}" data-tab="messages" onclick="switchDetailTab('messages')">
+            💬 群组留言 (<span id="messageCount">0</span>)
+          </div>
           <div class="detail-tab ${currentDetailTab === 'photos' ? 'active' : ''}" data-tab="photos" onclick="switchDetailTab('photos')">
             📸 照片墙 (<span id="photoCount">0</span>)
           </div>
@@ -1286,6 +1292,38 @@ async function openPlanDetail(planId) {
                     onclick="openNoteModal(${plan.id})">＋ 添加笔记</button>` : ''}
           </div>
           <div class="notes-list">${notesHtml}</div>
+        </div>
+        
+        <div id="messagesTabContent" class="tab-content" style="display: ${currentDetailTab === 'messages' ? 'block' : 'none'};">
+          <div class="messages-container">
+            <div id="messagesList" class="messages-list">
+              <div class="empty-state" style="padding: 30px;">
+                <div class="empty-state-icon" style="font-size:48px;">💬</div>
+                <h3>暂无留言</h3>
+                <p>${isJoined || isCreator ? '快来发送第一条消息，和搭子们聊聊吧！' : '加入计划后即可参与讨论'}</p>
+              </div>
+            </div>
+            ${(isJoined || isCreator) && currentUser ? `
+              <div class="message-input-wrapper">
+                <div class="message-input-area">
+                  <textarea id="messageInput" class="message-input" 
+                            placeholder="说点什么吧，最多500字..." 
+                            maxlength="500"
+                            onkeydown="handleMessageKeydown(event)"></textarea>
+                  <div class="message-input-actions">
+                    <span id="messageCharCount" class="message-char-count">0/500</span>
+                    <button id="sendMessageBtn" class="btn btn-primary message-send-btn" onclick="sendPlanMessage()">
+                      📨 发送
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ` : `
+              <div class="messages-join-hint">
+                <span>🔒 加入计划后即可参与群组讨论</span>
+              </div>
+            `}
+          </div>
         </div>
         
         <div id="photosTabContent" class="tab-content ${currentDetailTab === 'photos' ? 'active' : ''}" style="display: ${currentDetailTab === 'photos' ? 'block' : 'none'};">
@@ -1380,6 +1418,11 @@ async function openPlanDetail(planId) {
   if (currentDetailTab === 'photos') {
     loadPlanPhotos(planId);
   }
+  if (currentDetailTab === 'messages') {
+    loadPlanMessages(planId);
+  }
+  startMessagePolling(planId);
+  initMessageInput();
 }
 
 async function joinPlan(planId) {
@@ -1539,6 +1582,9 @@ function closeDetailModal() {
   currentDetailPlanId = null;
   currentDetailPlan = null;
   currentPlanPhotos = [];
+  currentPlanMessages = [];
+  stopMessagePolling();
+  lastMessageTimestamp = null;
 }
 
 function switchDetailTab(tab) {
@@ -1547,6 +1593,7 @@ function switchDetailTab(tab) {
     t.classList.toggle('active', t.dataset.tab === tab);
   });
   document.getElementById('notesTabContent').style.display = tab === 'notes' ? 'block' : 'none';
+  document.getElementById('messagesTabContent').style.display = tab === 'messages' ? 'block' : 'none';
   document.getElementById('photosTabContent').style.display = tab === 'photos' ? 'block' : 'none';
   document.getElementById('guideTabContent').style.display = tab === 'guide' ? 'block' : 'none';
   
@@ -1555,6 +1602,9 @@ function switchDetailTab(tab) {
   }
   if (tab === 'guide' && currentDetailPlanId) {
     loadGuideTab(currentDetailPlanId);
+  }
+  if (tab === 'messages' && currentDetailPlanId) {
+    loadPlanMessages(currentDetailPlanId);
   }
 }
 
@@ -1616,6 +1666,235 @@ function renderPhotoWall(photos) {
       }).join('')}
     </div>
   `;
+}
+
+async function loadPlanMessages(planId) {
+  const res = await api(`${API}/plans/${planId}/messages`);
+  if (res.success) {
+    currentPlanMessages = res.messages;
+    const countEl = document.getElementById('messageCount');
+    if (countEl) countEl.textContent = res.messages.length;
+    renderPlanMessages(res.messages);
+    if (res.messages.length > 0) {
+      lastMessageTimestamp = res.messages[res.messages.length - 1].created_at;
+    }
+  }
+}
+
+function renderPlanMessages(messages) {
+  const container = document.getElementById('messagesList');
+  if (!container) return;
+
+  if (!messages || messages.length === 0) {
+    const isJoined = currentDetailPlan?.participants?.some(p => Number(p.id) === Number(currentUser?.id));
+    const isCreator = Number(currentDetailPlan?.creator_id) === Number(currentUser?.id);
+    container.innerHTML = `
+      <div class="empty-state" style="padding: 30px;">
+        <div class="empty-state-icon" style="font-size:48px;">💬</div>
+        <h3>暂无留言</h3>
+        <p>${isJoined || isCreator ? '快来发送第一条消息，和搭子们聊聊吧！' : '加入计划后即可参与讨论'}</p>
+      </div>
+    `;
+    return;
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  let lastDateStr = '';
+  let html = '';
+
+  messages.forEach(msg => {
+    const msgDate = new Date(msg.created_at);
+    const msgDateOnly = new Date(msgDate);
+    msgDateOnly.setHours(0, 0, 0, 0);
+    let dateStr = '';
+    if (msgDateOnly.getTime() === today.getTime()) {
+      dateStr = '今天';
+    } else if (msgDateOnly.getTime() === yesterday.getTime()) {
+      dateStr = '昨天';
+    } else {
+      dateStr = `${msgDate.getMonth() + 1}月${msgDate.getDate()}日`;
+    }
+
+    if (dateStr !== lastDateStr) {
+      html += `
+        <div class="message-date-divider">
+          <span>${dateStr}</span>
+        </div>
+      `;
+      lastDateStr = dateStr;
+    }
+
+    const isMine = currentUser && Number(msg.sender_id) === Number(currentUser.id);
+    const timeStr = `${String(msgDate.getHours()).padStart(2, '0')}:${String(msgDate.getMinutes()).padStart(2, '0')}`;
+
+    html += `
+      <div class="message-item ${isMine ? 'mine' : ''}" data-message-id="${msg.id}">
+        <div class="message-avatar">${msg.sender_avatar || '👤'}</div>
+        <div class="message-body">
+          <div class="message-header">
+            <span class="message-sender-name">${msg.sender_name}</span>
+            <span class="message-time">${timeStr}</span>
+          </div>
+          <div class="message-content">${escapeHtml(msg.content)}</div>
+        </div>
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
+  scrollMessagesToBottom();
+}
+
+function scrollMessagesToBottom() {
+  const container = document.getElementById('messagesList');
+  if (container) {
+    setTimeout(() => {
+      container.scrollTop = container.scrollHeight;
+    }, 50);
+  }
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function formatCommentTime(str) {
+  if (!str) return '';
+  const d = new Date(str);
+  const now = new Date();
+  const diff = now - d;
+  const seconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (seconds < 60) return '刚刚';
+  if (minutes < 60) return `${minutes}分钟前`;
+  if (hours < 24) return `${hours}小时前`;
+  if (days < 7) return `${days}天前`;
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+}
+
+function initMessageInput() {
+  const input = document.getElementById('messageInput');
+  const charCount = document.getElementById('messageCharCount');
+  if (input && charCount) {
+    input.addEventListener('input', () => {
+      const len = input.value.length;
+      charCount.textContent = `${len}/500`;
+      charCount.style.color = len > 450 ? 'var(--danger)' : len > 400 ? 'var(--warning)' : 'var(--text-light)';
+    });
+  }
+}
+
+function handleMessageKeydown(event) {
+  if (event.key === 'Enter' && !event.shiftKey) {
+    event.preventDefault();
+    sendPlanMessage();
+  }
+}
+
+async function sendPlanMessage() {
+  if (!currentUser || !currentDetailPlanId) return;
+
+  const input = document.getElementById('messageInput');
+  const sendBtn = document.getElementById('sendMessageBtn');
+  if (!input) return;
+
+  const content = input.value.trim();
+  if (!content) {
+    showToast('消息内容不能为空', 'error');
+    return;
+  }
+  if (content.length > 500) {
+    showToast('消息内容不能超过500字', 'error');
+    return;
+  }
+
+  if (sendBtn) {
+    sendBtn.disabled = true;
+    sendBtn.textContent = '发送中...';
+  }
+
+  try {
+    const res = await api(`${API}/plans/${currentDetailPlanId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({
+        user_id: currentUser.id,
+        content: content
+      })
+    });
+
+    if (res.success) {
+      input.value = '';
+      const charCount = document.getElementById('messageCharCount');
+      if (charCount) {
+        charCount.textContent = '0/500';
+        charCount.style.color = 'var(--text-light)';
+      }
+      await loadPlanMessages(currentDetailPlanId);
+    } else {
+      showToast(res.error || '发送失败', 'error');
+    }
+  } catch (e) {
+    showToast('发送失败，请重试', 'error');
+  } finally {
+    if (sendBtn) {
+      sendBtn.disabled = false;
+      sendBtn.textContent = '📨 发送';
+    }
+  }
+}
+
+function startMessagePolling(planId) {
+  stopMessagePolling();
+  messagePollingTimer = setInterval(async () => {
+    if (!currentDetailPlanId || currentDetailTab !== 'messages') return;
+    try {
+      const res = await api(`${API}/plans/${planId}/messages`);
+      if (res.success) {
+        const countEl = document.getElementById('messageCount');
+        if (countEl) countEl.textContent = res.messages.length;
+
+        const newMessages = res.messages;
+        const oldLen = currentPlanMessages.length;
+        
+        if (newMessages.length !== oldLen) {
+          currentPlanMessages = newMessages;
+          renderPlanMessages(newMessages);
+          if (newMessages.length > 0) {
+            lastMessageTimestamp = newMessages[newMessages.length - 1].created_at;
+          }
+        } else {
+          let hasChange = false;
+          for (let i = 0; i < oldLen; i++) {
+            if (currentPlanMessages[i]?.id !== newMessages[i]?.id) {
+              hasChange = true;
+              break;
+            }
+          }
+          if (hasChange) {
+            currentPlanMessages = newMessages;
+            renderPlanMessages(newMessages);
+          }
+        }
+      }
+    } catch (e) {
+    }
+  }, 3000);
+}
+
+function stopMessagePolling() {
+  if (messagePollingTimer) {
+    clearInterval(messagePollingTimer);
+    messagePollingTimer = null;
+  }
 }
 
 function openUploadPhotoModal(planId) {

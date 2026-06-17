@@ -79,6 +79,14 @@
       "city": "西安",
       "id": 10,
       "created_at": "2026-06-16 15:56:50"
+    },
+    {
+      "username": "测试小明",
+      "avatar": "🧑‍🚀",
+      "bio": "",
+      "city": "上海",
+      "id": 11,
+      "created_at": "2026-06-16 18:45:00"
     }
   ],
   "plans": [
@@ -304,6 +312,51 @@
           "city": "上海",
           "id": 1,
           "created_at": "2026-06-16 15:56:50"
+        }
+      ]
+    },
+    {
+      "creator_id": 11,
+      "title": "测试留言板的路线",
+      "theme": "老洋房巡礼",
+      "city": "上海",
+      "description": "用于测试留言板功能的计划",
+      "start_time": "2026-06-17 18:55:00",
+      "duration_hours": 3,
+      "max_participants": 10,
+      "meeting_point": "人民广场地铁站",
+      "route_points": "[{\"name\":\"起点\",\"time\":\"10:00\"}]",
+      "difficulty_level": "medium",
+      "id": 14,
+      "created_at": "2026-06-16 18:55:55",
+      "creator": {
+        "username": "测试小明",
+        "avatar": "🧑‍🚀",
+        "bio": "",
+        "city": "上海",
+        "id": 11,
+        "created_at": "2026-06-16 18:45:00"
+      },
+      "participants": [
+        {
+          "username": "测试小明",
+          "avatar": "🧑‍🚀",
+          "bio": "",
+          "city": "上海",
+          "id": 11,
+          "created_at": "2026-06-16 18:45:00"
+        }
+      ],
+      "new_badges": [
+        {
+          "id": "first_plan",
+          "name": "初次发布",
+          "icon": "📝",
+          "description": "发布第一个Citywalk计划",
+          "category": "create",
+          "condition_type": "created_plans",
+          "condition_value": 1,
+          "color": "#00B894"
         }
       ]
     }
@@ -602,6 +655,18 @@
       "user_id": 1,
       "role": "creator",
       "id": 49
+    },
+    {
+      "plan_id": "1",
+      "user_id": 11,
+      "role": "member",
+      "id": 50
+    },
+    {
+      "plan_id": 14,
+      "user_id": 11,
+      "role": "creator",
+      "id": 51
     }
   ],
   "difficulty_levels": [
@@ -1364,6 +1429,17 @@
       "is_read": 0,
       "id": 29,
       "created_at": "2026-06-16 15:56:50"
+    },
+    {
+      "user_id": 11,
+      "type": "badge_unlock",
+      "content": "🎉 恭喜获得成就徽章：初次发布",
+      "related_id": "first_plan",
+      "related_type": "badge",
+      "from_user_id": null,
+      "is_read": "0",
+      "id": 30,
+      "created_at": "2026-06-16 18:55:55"
     }
   ],
   "ratings": [],
@@ -1771,9 +1847,43 @@
       "extra_data": "{\"title\":\"测试难度等级的路线\",\"city\":\"测试城市\",\"theme\":\"park\"}",
       "id": 34,
       "created_at": "2026-06-16 16:04:26"
+    },
+    {
+      "user_id": 11,
+      "type": "join_plan",
+      "related_id": "1",
+      "related_type": "plan",
+      "extra_data": "{\"title\":\"法租界老洋房深度游\",\"city\":\"上海\",\"theme\":\"old_building\"}",
+      "id": 35,
+      "created_at": "2026-06-16 18:46:03"
+    },
+    {
+      "user_id": 11,
+      "type": "create_plan",
+      "related_id": 14,
+      "related_type": "plan",
+      "extra_data": "{\"title\":\"测试留言板的路线\",\"city\":\"上海\",\"theme\":\"老洋房巡礼\"}",
+      "id": 36,
+      "created_at": "2026-06-16 18:55:55"
     }
   ],
   "plan_updates": [],
+  "plan_messages": [
+    {
+      "plan_id": "14",
+      "sender_id": 11,
+      "content": "大家好！我们明天上午10点在人民广场地铁站1号口集合怎么样？附近有一家不错的生煎店可以先吃早餐~",
+      "id": 1,
+      "created_at": "2026-06-16 18:58:35"
+    },
+    {
+      "plan_id": "14",
+      "sender_id": 11,
+      "content": "另外，建议大家穿舒适的运动鞋，这条路线走路比较多！",
+      "id": 2,
+      "created_at": "2026-06-16 18:59:30"
+    }
+  ],
   "route_templates": [],
   "photos": [
     {
@@ -2062,31 +2172,218 @@
     }
   ],
   "search_history": [],
-  "browsed_plans": [],
+  "browsed_plans": [
+    {
+      "user_id": "11",
+      "plan_id": "1",
+      "id": 1,
+      "created_at": "2026-06-16 18:45:32"
+    },
+    {
+      "user_id": "11",
+      "plan_id": 14,
+      "id": 2,
+      "created_at": "2026-06-16 18:55:56"
+    }
+  ],
   "route_guides": [],
   "checkin_points": [],
   "guide_versions": [],
   "share_pages": [],
+  "checkins": [],
+  "badges": [
+    {
+      "id": "first_plan",
+      "name": "初次发布",
+      "icon": "📝",
+      "description": "发布第一个Citywalk计划",
+      "category": "create",
+      "condition_type": "created_plans",
+      "condition_value": 1,
+      "color": "#00B894"
+    },
+    {
+      "id": "plan_creator_3",
+      "name": "计划达人",
+      "icon": "📋",
+      "description": "发布3个Citywalk计划",
+      "category": "create",
+      "condition_type": "created_plans",
+      "condition_value": 3,
+      "color": "#0984E3"
+    },
+    {
+      "id": "plan_creator_10",
+      "name": "资深发起人",
+      "icon": "🏆",
+      "description": "发布10个Citywalk计划",
+      "category": "create",
+      "condition_type": "created_plans",
+      "condition_value": 10,
+      "color": "#E17055"
+    },
+    {
+      "id": "city_explorer_3",
+      "name": "城市探索者",
+      "icon": "🗺️",
+      "description": "在3个不同城市参加活动",
+      "category": "explore",
+      "condition_type": "unique_cities",
+      "condition_value": 3,
+      "color": "#6C5CE7"
+    },
+    {
+      "id": "city_explorer_5",
+      "name": "环球旅行家",
+      "icon": "🌍",
+      "description": "在5个不同城市参加活动",
+      "category": "explore",
+      "condition_type": "unique_cities",
+      "condition_value": 5,
+      "color": "#A29BFE"
+    },
+    {
+      "id": "social_10",
+      "name": "社交达人",
+      "icon": "🤝",
+      "description": "关注10位搭子",
+      "category": "social",
+      "condition_type": "following_count",
+      "condition_value": 10,
+      "color": "#FDCB6E"
+    },
+    {
+      "id": "popular_10",
+      "name": "人气王",
+      "icon": "⭐",
+      "description": "获得10位粉丝",
+      "category": "social",
+      "condition_type": "followers_count",
+      "condition_value": 10,
+      "color": "#FF7675"
+    },
+    {
+      "id": "note_master_5",
+      "name": "笔记高手",
+      "icon": "✍️",
+      "description": "写满5篇路线笔记",
+      "category": "create",
+      "condition_type": "notes_count",
+      "condition_value": 5,
+      "color": "#00CEC9"
+    },
+    {
+      "id": "note_master_20",
+      "name": "专栏作家",
+      "icon": "📚",
+      "description": "写满20篇路线笔记",
+      "category": "create",
+      "condition_type": "notes_count",
+      "condition_value": 20,
+      "color": "#55EFC4"
+    },
+    {
+      "id": "activity_5",
+      "name": "活动达人",
+      "icon": "🎯",
+      "description": "参加5场Citywalk活动",
+      "category": "participate",
+      "condition_type": "joined_plans",
+      "condition_value": 5,
+      "color": "#E84393"
+    },
+    {
+      "id": "activity_20",
+      "name": "Citywalk狂人",
+      "icon": "🔥",
+      "description": "参加20场Citywalk活动",
+      "category": "participate",
+      "condition_type": "joined_plans",
+      "condition_value": 20,
+      "color": "#D63031"
+    },
+    {
+      "id": "first_checkin",
+      "name": "首签成功",
+      "icon": "✅",
+      "description": "完成第一次活动签到",
+      "category": "participate",
+      "condition_type": "checkins_count",
+      "condition_value": 1,
+      "color": "#00B894"
+    },
+    {
+      "id": "checkin_streak_7",
+      "name": "连续打卡",
+      "icon": "📅",
+      "description": "连续7天签到",
+      "category": "participate",
+      "condition_type": "consecutive_checkins",
+      "condition_value": 7,
+      "color": "#F39C12"
+    },
+    {
+      "id": "collector_10",
+      "name": "收藏爱好者",
+      "icon": "⭐",
+      "description": "收藏10条路线",
+      "category": "collect",
+      "condition_type": "favorites_count",
+      "condition_value": 10,
+      "color": "#FDCB6E"
+    },
+    {
+      "id": "photo_20",
+      "name": "摄影达人",
+      "icon": "📷",
+      "description": "上传20张活动照片",
+      "category": "create",
+      "condition_type": "photos_count",
+      "condition_value": 20,
+      "color": "#A29BFE"
+    },
+    {
+      "id": "comment_20",
+      "name": "评论达人",
+      "icon": "💬",
+      "description": "发表20条评论",
+      "category": "social",
+      "condition_type": "comments_count",
+      "condition_value": 20,
+      "color": "#74B9FF"
+    }
+  ],
+  "user_badges": [
+    {
+      "user_id": 11,
+      "badge_id": "first_plan",
+      "unlocked_at": "2026-06-16 18:55:55",
+      "id": 1,
+      "created_at": "2026-06-16 18:55:55"
+    }
+  ],
   "counters": {
-    "users": 10,
-    "plans": 13,
-    "participants": 49,
+    "users": 11,
+    "plans": 14,
+    "participants": 51,
     "notes": 10,
     "favorites": 11,
     "comments": 26,
-    "notifications": 29,
+    "notifications": 30,
     "ratings": 0,
     "follows": 16,
-    "feeds": 34,
+    "feeds": 36,
     "plan_updates": 0,
     "route_templates": 0,
     "photos": 18,
     "photo_likes": 20,
     "search_history": 0,
-    "browsed_plans": 0,
+    "browsed_plans": 2,
     "route_guides": 0,
     "checkin_points": 0,
     "guide_versions": 0,
-    "share_pages": 0
+    "share_pages": 0,
+    "user_badges": 1,
+    "plan_messages": 2
   }
 }
