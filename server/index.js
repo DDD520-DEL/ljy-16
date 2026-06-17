@@ -73,7 +73,8 @@ app.post('/api/plans', (req, res) => {
     const {
       creator_id, title, theme, city, description,
       start_time, duration_hours, max_participants,
-      meeting_point, route_points, difficulty_level
+      meeting_point, route_points, difficulty_level,
+      equipment
     } = req.body;
 
     if (!creator_id || !title || !theme || !city || !start_time) {
@@ -83,27 +84,51 @@ app.post('/api/plans', (req, res) => {
     const validLevels = ['easy', 'medium', 'hard'];
     const difficulty = validLevels.includes(difficulty_level) ? difficulty_level : 'medium';
 
-    const stmt = db.prepare(`
-      INSERT INTO citywalk_plans 
-      (creator_id, title, theme, city, description, start_time, 
-       duration_hours, max_participants, meeting_point, route_points, difficulty_level)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    const result = stmt.run(
-      creator_id, title, theme, city, description || '',
-      start_time, duration_hours || 3, max_participants || 6,
-      meeting_point || '', route_points || '', difficulty
-    );
+    let planId;
+    db.transaction(() => {
+      const stmt = db.prepare(`
+        INSERT INTO citywalk_plans 
+        (creator_id, title, theme, city, description, start_time, 
+         duration_hours, max_participants, meeting_point, route_points, difficulty_level, status, current_participants)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'recruiting', 1)
+      `);
+      const result = stmt.run(
+        creator_id, title, theme, city, description || '',
+        start_time, duration_hours || 3, max_participants || 6,
+        meeting_point || '', route_points || '', difficulty
+      );
+      planId = result.lastInsertRowid;
 
-    const participantStmt = db.prepare(`
-      INSERT INTO plan_participants (plan_id, user_id, role) VALUES (?, ?, 'creator')
-    `);
-    participantStmt.run(result.lastInsertRowid, creator_id);
+      const participantStmt = db.prepare(`
+        INSERT INTO plan_participants (plan_id, user_id, role) VALUES (?, ?, 'creator')
+      `);
+      participantStmt.run(planId, creator_id);
 
-    const plan = db.prepare('SELECT * FROM citywalk_plans WHERE id = ?').get(result.lastInsertRowid);
+      if (Array.isArray(equipment) && equipment.length > 0) {
+        const equipStmt = db.prepare(`
+          INSERT INTO plan_equipment (plan_id, name, icon, category, is_custom, sort_order)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `);
+        equipment.forEach((item, index) => {
+          equipStmt.run(
+            planId,
+            item.name,
+            item.icon || '',
+            item.category || '',
+            item.is_custom ? 1 : 0,
+            index
+          );
+        });
+      }
+    });
+
+    const plan = db.prepare('SELECT * FROM citywalk_plans WHERE id = ?').get(planId);
     const creator = db.prepare('SELECT id, username, avatar FROM users WHERE id = ?').get(creator_id);
     plan.creator = creator;
     plan.participants = [creator];
+
+    const planEquip = db.prepare('SELECT * FROM plan_equipment WHERE plan_id = ? ORDER BY sort_order').all(planId);
+    plan.equipment = planEquip;
 
     createFeed(creator_id, 'create_plan', plan.id, 'plan', {
       title: plan.title,
@@ -312,6 +337,9 @@ app.get('/api/plans/:id', (req, res) => {
     });
     plan.updates = updates;
     plan.latest_update = updates[0] || null;
+
+    const equipment = db.prepare('SELECT * FROM plan_equipment WHERE plan_id = ? ORDER BY sort_order').all(plan.id);
+    plan.equipment = equipment;
 
     delete plan.creator_name;
     delete plan.creator_avatar;
@@ -1996,6 +2024,81 @@ app.get('/api/themes', (req, res) => {
   res.json({ success: true, themes });
 });
 
+const themeEquipmentMap = {
+  default: [
+    { name: '舒适运动鞋', icon: '👟', category: '基础装备' },
+    { name: '水壶', icon: '💧', category: '基础装备' },
+    { name: '手机充电宝', icon: '🔋', category: '基础装备' },
+    { name: '遮阳帽', icon: '🧢', category: '基础装备' },
+    { name: '防晒霜', icon: '🧴', category: '基础装备' },
+    { name: '纸巾/湿纸巾', icon: '🧻', category: '基础装备' }
+  ],
+  old_building: [
+    { name: '相机', icon: '📷', category: '主题装备' },
+    { name: '笔记本+笔', icon: '📓', category: '主题装备' },
+    { name: '放大镜', icon: '🔍', category: '主题装备' }
+  ],
+  market: [
+    { name: '环保购物袋', icon: '🛍️', category: '主题装备' },
+    { name: '便携秤', icon: '⚖️', category: '主题装备' },
+    { name: '保鲜袋', icon: '📦', category: '主题装备' }
+  ],
+  bridge: [
+    { name: '墨镜', icon: '🕶️', category: '主题装备' },
+    { name: '防风外套', icon: '🧥', category: '主题装备' }
+  ],
+  alley: [
+    { name: '相机', icon: '📷', category: '主题装备' },
+    { name: '小电筒', icon: '🔦', category: '主题装备' }
+  ],
+  coffee: [
+    { name: '便携咖啡杯', icon: '☕', category: '主题装备' },
+    { name: '笔记本', icon: '📓', category: '主题装备' },
+    { name: '书签', icon: '🔖', category: '主题装备' }
+  ],
+  street_art: [
+    { name: '相机', icon: '📷', category: '主题装备' },
+    { name: '速写本', icon: '📒', category: '主题装备' },
+    { name: '彩笔', icon: '🖍️', category: '主题装备' }
+  ],
+  river: [
+    { name: '墨镜', icon: '🕶️', category: '主题装备' },
+    { name: '防风外套', icon: '🧥', category: '主题装备' },
+    { name: '野餐垫', icon: '🧺', category: '主题装备' }
+  ],
+  park: [
+    { name: '野餐垫', icon: '🧺', category: '主题装备' },
+    { name: '驱蚊液', icon: '🦟', category: '主题装备' },
+    { name: '飞盘/球类', icon: '🥏', category: '主题装备' },
+    { name: '墨镜', icon: '🕶️', category: '主题装备' }
+  ],
+  night: [
+    { name: '手电筒/头灯', icon: '🔦', category: '主题装备' },
+    { name: '反光条/夜光装备', icon: '🌟', category: '主题装备' },
+    { name: '驱蚊液', icon: '🦟', category: '主题装备' },
+    { name: '薄外套', icon: '🧥', category: '主题装备' }
+  ],
+  food: [
+    { name: '便携餐具', icon: '🥢', category: '主题装备' },
+    { name: '湿纸巾', icon: '🧻', category: '主题装备' },
+    { name: '漱口水', icon: '🪥', category: '主题装备' },
+    { name: '肠胃药', icon: '💊', category: '主题装备' },
+    { name: '环保袋', icon: '🛍️', category: '主题装备' }
+  ]
+};
+
+app.get('/api/themes/:themeId/equipment', (req, res) => {
+  try {
+    const themeId = req.params.themeId;
+    const defaultEquip = themeEquipmentMap.default || [];
+    const themeEquip = themeEquipmentMap[themeId] || [];
+    const equipment = [...defaultEquip, ...themeEquip];
+    res.json({ success: true, equipment });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/cities', (req, res) => {
   const cities = db.prepare('SELECT DISTINCT city FROM citywalk_plans WHERE city IS NOT NULL AND city != "" ORDER BY city').all();
   const citySet = new Set(cities.map(c => c.city));
@@ -3423,6 +3526,185 @@ app.post('/api/plans/:id/messages', (req, res) => {
     });
 
     res.json({ success: true, message: responseMsg });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/plans/:id/equipment', (req, res) => {
+  try {
+    const planId = req.params.id;
+    const { user_id } = req.query;
+
+    const plan = db.prepare('SELECT * FROM citywalk_plans WHERE id = ?').get(planId);
+    if (!plan) {
+      return res.status(404).json({ error: '计划不存在' });
+    }
+
+    const equipment = db.prepare('SELECT * FROM plan_equipment WHERE plan_id = ? ORDER BY sort_order').all(planId);
+
+    if (user_id) {
+      const checks = db.prepare('SELECT * FROM user_equipment_checks WHERE plan_id = ? AND user_id = ?').all(planId, user_id);
+      const checkMap = new Map(checks.map(c => [c.equipment_id, c.is_checked]));
+      equipment.forEach(item => {
+        item.is_checked = checkMap.has(item.id) ? checkMap.get(item.id) : 0;
+      });
+    }
+
+    res.json({ success: true, equipment });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/plans/:id/equipment/check', (req, res) => {
+  try {
+    const planId = req.params.id;
+    const { user_id, equipment_id, is_checked } = req.body;
+
+    if (!user_id || !equipment_id) {
+      return res.status(400).json({ error: '缺少必填字段' });
+    }
+
+    const plan = db.prepare('SELECT * FROM citywalk_plans WHERE id = ?').get(planId);
+    if (!plan) {
+      return res.status(404).json({ error: '计划不存在' });
+    }
+
+    const participant = db.prepare('SELECT * FROM plan_participants WHERE plan_id = ? AND user_id = ?').get(planId, user_id);
+    if (!participant) {
+      return res.status(403).json({ error: '只有计划参与者才能标记装备' });
+    }
+
+    const equipment = db.prepare('SELECT * FROM plan_equipment WHERE id = ? AND plan_id = ?').get(equipment_id, planId);
+    if (!equipment) {
+      return res.status(404).json({ error: '装备项不存在' });
+    }
+
+    const existing = db.prepare('SELECT * FROM user_equipment_checks WHERE plan_id = ? AND user_id = ? AND equipment_id = ?').get(planId, user_id, equipment_id);
+
+    if (existing) {
+      db.prepare('UPDATE user_equipment_checks SET is_checked = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(
+        is_checked ? 1 : 0,
+        existing.id
+      );
+    } else {
+      db.prepare('INSERT INTO user_equipment_checks (plan_id, user_id, equipment_id, is_checked) VALUES (?, ?, ?, ?)').run(
+        planId,
+        user_id,
+        equipment_id,
+        is_checked ? 1 : 0
+      );
+    }
+
+    const updated = db.prepare('SELECT * FROM user_equipment_checks WHERE plan_id = ? AND user_id = ? AND equipment_id = ?').get(planId, user_id, equipment_id);
+    res.json({ success: true, check: updated });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/plans/:id/equipment', (req, res) => {
+  try {
+    const planId = req.params.id;
+    const { user_id, name, icon, category } = req.body;
+
+    if (!user_id || !name) {
+      return res.status(400).json({ error: '缺少必填字段' });
+    }
+
+    const plan = db.prepare('SELECT * FROM citywalk_plans WHERE id = ?').get(planId);
+    if (!plan) {
+      return res.status(404).json({ error: '计划不存在' });
+    }
+
+    if (plan.creator_id != user_id) {
+      return res.status(403).json({ error: '只有创建者才能添加装备' });
+    }
+
+    const maxOrder = db.prepare('SELECT COALESCE(MAX(sort_order), -1) as max_order FROM plan_equipment WHERE plan_id = ?').get(planId);
+    const nextOrder = (maxOrder?.max_order || -1) + 1;
+
+    const stmt = db.prepare(`
+      INSERT INTO plan_equipment (plan_id, name, icon, category, is_custom, sort_order)
+      VALUES (?, ?, ?, ?, 1, ?)
+    `);
+    const result = stmt.run(planId, name, icon || '', category || '自定义', nextOrder);
+
+    const equipment = db.prepare('SELECT * FROM plan_equipment WHERE id = ?').get(result.lastInsertRowid);
+    res.json({ success: true, equipment });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/plans/:id/equipment/:equipId', (req, res) => {
+  try {
+    const planId = req.params.id;
+    const equipId = req.params.equipId;
+    const { user_id } = req.body;
+
+    if (!user_id) {
+      return res.status(400).json({ error: '缺少用户ID' });
+    }
+
+    const plan = db.prepare('SELECT * FROM citywalk_plans WHERE id = ?').get(planId);
+    if (!plan) {
+      return res.status(404).json({ error: '计划不存在' });
+    }
+
+    if (plan.creator_id != user_id) {
+      return res.status(403).json({ error: '只有创建者才能删除装备' });
+    }
+
+    const equipment = db.prepare('SELECT * FROM plan_equipment WHERE id = ? AND plan_id = ?').get(equipId, planId);
+    if (!equipment) {
+      return res.status(404).json({ error: '装备项不存在' });
+    }
+
+    db.prepare('DELETE FROM plan_equipment WHERE id = ?').run(equipId);
+    db.prepare('DELETE FROM user_equipment_checks WHERE equipment_id = ?').run(equipId);
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/plans/:id/equipment/checks', (req, res) => {
+  try {
+    const planId = req.params.id;
+
+    const plan = db.prepare('SELECT * FROM citywalk_plans WHERE id = ?').get(planId);
+    if (!plan) {
+      return res.status(404).json({ error: '计划不存在' });
+    }
+
+    const equipment = db.prepare('SELECT * FROM plan_equipment WHERE plan_id = ? ORDER BY sort_order').all(planId);
+    const participants = db.prepare(`
+      SELECT u.id, u.username, u.avatar
+      FROM plan_participants pp
+      LEFT JOIN users u ON pp.user_id = u.id
+      WHERE pp.plan_id = ?
+    `).all(planId);
+
+    const checks = db.prepare('SELECT * FROM user_equipment_checks WHERE plan_id = ?').all(planId);
+
+    const result = equipment.map(equip => {
+      const equipChecks = checks.filter(c => c.equipment_id == equip.id);
+      const checkedUserIds = new Set(equipChecks.filter(c => c.is_checked).map(c => c.user_id));
+      return {
+        ...equip,
+        checked_count: checkedUserIds.size,
+        checked_users: participants.filter(p => checkedUserIds.has(p.id)).map(p => ({
+          id: p.id,
+          username: p.username,
+          avatar: p.avatar
+        }))
+      };
+    });
+
+    res.json({ success: true, equipment_checks: result });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

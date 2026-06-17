@@ -359,6 +359,322 @@
           "color": "#00B894"
         }
       ]
+    },
+    {
+      "creator_id": 1,
+      "title": "????????",
+      "theme": "night",
+      "city": "??",
+      "description": "????????",
+      "start_time": "2026-07-01T19:00:00",
+      "duration_hours": 3,
+      "max_participants": 6,
+      "meeting_point": "????",
+      "route_points": "",
+      "difficulty_level": "easy",
+      "id": 15,
+      "created_at": "2026-06-17 01:51:29",
+      "creator": {
+        "username": "漫步达人",
+        "avatar": "🧑‍🎨",
+        "bio": "热爱探索城市的每一个角落",
+        "city": "上海",
+        "id": 1,
+        "created_at": "2026-06-16 15:56:50"
+      },
+      "participants": [
+        {
+          "username": "漫步达人",
+          "avatar": "🧑‍🎨",
+          "bio": "热爱探索城市的每一个角落",
+          "city": "上海",
+          "id": 1,
+          "created_at": "2026-06-16 15:56:50"
+        }
+      ],
+      "equipment": [
+        {
+          "plan_id": 15,
+          "name": "?????",
+          "icon": "",
+          "category": "????",
+          "is_custom": 0,
+          "sort_order": 0,
+          "id": 1,
+          "created_at": "2026-06-17 01:51:29"
+        },
+        {
+          "plan_id": 15,
+          "name": "???/??",
+          "icon": "",
+          "category": "????",
+          "is_custom": 0,
+          "sort_order": 1,
+          "id": 2,
+          "created_at": "2026-06-17 01:51:29"
+        },
+        {
+          "plan_id": 15,
+          "name": "???????",
+          "icon": "",
+          "category": "???",
+          "is_custom": 1,
+          "sort_order": 2,
+          "id": 3,
+          "created_at": "2026-06-17 01:51:29"
+        }
+      ],
+      "new_badges": [
+        {
+          "id": "first_plan",
+          "name": "初次发布",
+          "icon": "📝",
+          "description": "发布第一个Citywalk计划",
+          "category": "create",
+          "condition_type": "created_plans",
+          "condition_value": 1,
+          "color": "#00B894"
+        },
+        {
+          "id": "plan_creator_3",
+          "name": "计划达人",
+          "icon": "📋",
+          "description": "发布3个Citywalk计划",
+          "category": "create",
+          "condition_type": "created_plans",
+          "condition_value": 3,
+          "color": "#0984E3"
+        },
+        {
+          "id": "city_explorer_3",
+          "name": "城市探索者",
+          "icon": "🗺️",
+          "description": "在3个不同城市参加活动",
+          "category": "explore",
+          "condition_type": "unique_cities",
+          "condition_value": 3,
+          "color": "#6C5CE7"
+        },
+        {
+          "id": "city_explorer_5",
+          "name": "环球旅行家",
+          "icon": "🌍",
+          "description": "在5个不同城市参加活动",
+          "category": "explore",
+          "condition_type": "unique_cities",
+          "condition_value": 5,
+          "color": "#A29BFE"
+        },
+        {
+          "id": "activity_5",
+          "name": "活动达人",
+          "icon": "🎯",
+          "description": "参加5场Citywalk活动",
+          "category": "participate",
+          "condition_type": "joined_plans",
+          "condition_value": 5,
+          "color": "#E84393"
+        }
+      ]
+    },
+    {
+      "creator_id": 1,
+      "title": "??????2",
+      "theme": "food",
+      "city": "??",
+      "description": "????????2",
+      "start_time": "2026-08-01T10:00:00",
+      "duration_hours": 4,
+      "max_participants": 8,
+      "meeting_point": "???",
+      "route_points": "",
+      "difficulty_level": "medium",
+      "id": 16,
+      "created_at": "2026-06-17 01:53:49",
+      "creator": {
+        "username": "漫步达人",
+        "avatar": "🧑‍🎨",
+        "bio": "热爱探索城市的每一个角落",
+        "city": "上海",
+        "id": 1,
+        "created_at": "2026-06-16 15:56:50"
+      },
+      "participants": [
+        {
+          "username": "漫步达人",
+          "avatar": "🧑‍🎨",
+          "bio": "热爱探索城市的每一个角落",
+          "city": "上海",
+          "id": 1,
+          "created_at": "2026-06-16 15:56:50"
+        }
+      ],
+      "equipment": [
+        {
+          "plan_id": 16,
+          "name": "?????",
+          "icon": "",
+          "category": "????",
+          "is_custom": 0,
+          "sort_order": 0,
+          "id": 4,
+          "created_at": "2026-06-17 01:53:49"
+        },
+        {
+          "plan_id": 16,
+          "name": "??",
+          "icon": "",
+          "category": "????",
+          "is_custom": 0,
+          "sort_order": 1,
+          "id": 5,
+          "created_at": "2026-06-17 01:53:49"
+        },
+        {
+          "plan_id": 16,
+          "name": "????",
+          "icon": "",
+          "category": "????",
+          "is_custom": 0,
+          "sort_order": 2,
+          "id": 6,
+          "created_at": "2026-06-17 01:53:49"
+        }
+      ]
+    },
+    {
+      "creator_id": 3,
+      "title": "????????",
+      "theme": "food",
+      "city": "??",
+      "description": "??????????",
+      "start_time": "2026-09-01T10:00:00",
+      "duration_hours": 5,
+      "max_participants": 10,
+      "meeting_point": "???",
+      "route_points": "",
+      "difficulty_level": "easy",
+      "status": "recruiting",
+      "current_participants": "1",
+      "id": 17,
+      "created_at": "2026-06-17 02:00:47",
+      "creator": {
+        "username": "咖啡控",
+        "avatar": "☕",
+        "bio": "为了一杯好咖啡可以走五条街",
+        "city": "上海",
+        "id": 3,
+        "created_at": "2026-06-16 15:56:50"
+      },
+      "participants": [
+        {
+          "username": "咖啡控",
+          "avatar": "☕",
+          "bio": "为了一杯好咖啡可以走五条街",
+          "city": "上海",
+          "id": 3,
+          "created_at": "2026-06-16 15:56:50"
+        }
+      ],
+      "equipment": [
+        {
+          "plan_id": 17,
+          "name": "?????",
+          "icon": "",
+          "category": "????",
+          "is_custom": 0,
+          "sort_order": 0,
+          "id": 8,
+          "created_at": "2026-06-17 02:00:47",
+          "is_checked": 0
+        },
+        {
+          "plan_id": 17,
+          "name": "??",
+          "icon": "",
+          "category": "????",
+          "is_custom": 0,
+          "sort_order": 1,
+          "id": 9,
+          "created_at": "2026-06-17 02:00:47",
+          "is_checked": 0
+        },
+        {
+          "plan_id": 17,
+          "name": "???",
+          "icon": "",
+          "category": "????",
+          "is_custom": 0,
+          "sort_order": 2,
+          "id": 10,
+          "created_at": "2026-06-17 02:00:47",
+          "is_checked": 0
+        },
+        {
+          "plan_id": 17,
+          "name": "????",
+          "icon": "",
+          "category": "????",
+          "is_custom": 0,
+          "sort_order": 3,
+          "id": 11,
+          "created_at": "2026-06-17 02:00:47",
+          "is_checked": 0
+        },
+        {
+          "plan_id": 17,
+          "name": "??????",
+          "icon": "",
+          "category": "???",
+          "is_custom": 1,
+          "sort_order": 4,
+          "id": 12,
+          "created_at": "2026-06-17 02:00:47",
+          "is_checked": 0
+        }
+      ],
+      "new_badges": [
+        {
+          "id": "first_plan",
+          "name": "初次发布",
+          "icon": "📝",
+          "description": "发布第一个Citywalk计划",
+          "category": "create",
+          "condition_type": "created_plans",
+          "condition_value": 1,
+          "color": "#00B894"
+        },
+        {
+          "id": "city_explorer_3",
+          "name": "城市探索者",
+          "icon": "🗺️",
+          "description": "在3个不同城市参加活动",
+          "category": "explore",
+          "condition_type": "unique_cities",
+          "condition_value": 3,
+          "color": "#6C5CE7"
+        },
+        {
+          "id": "city_explorer_5",
+          "name": "环球旅行家",
+          "icon": "🌍",
+          "description": "在5个不同城市参加活动",
+          "category": "explore",
+          "condition_type": "unique_cities",
+          "condition_value": 5,
+          "color": "#A29BFE"
+        },
+        {
+          "id": "activity_5",
+          "name": "活动达人",
+          "icon": "🎯",
+          "description": "参加5场Citywalk活动",
+          "category": "participate",
+          "condition_type": "joined_plans",
+          "condition_value": 5,
+          "color": "#E84393"
+        }
+      ]
     }
   ],
   "participants": [
@@ -667,6 +983,36 @@
       "user_id": 11,
       "role": "creator",
       "id": 51
+    },
+    {
+      "plan_id": 15,
+      "user_id": 1,
+      "role": "creator",
+      "id": 52
+    },
+    {
+      "plan_id": 16,
+      "user_id": 1,
+      "role": "creator",
+      "id": 53
+    },
+    {
+      "plan_id": "1",
+      "user_id": 2,
+      "role": "member",
+      "id": 54
+    },
+    {
+      "plan_id": 17,
+      "user_id": 3,
+      "role": "creator",
+      "id": 55
+    },
+    {
+      "plan_id": "17",
+      "user_id": 2,
+      "role": "member",
+      "id": 56
     }
   ],
   "difficulty_levels": [
@@ -1440,6 +1786,149 @@
       "is_read": "0",
       "id": 30,
       "created_at": "2026-06-16 18:55:55"
+    },
+    {
+      "user_id": 1,
+      "type": "badge_unlock",
+      "content": "🎉 恭喜获得成就徽章：初次发布",
+      "related_id": "first_plan",
+      "related_type": "badge",
+      "from_user_id": null,
+      "is_read": "0",
+      "id": 31,
+      "created_at": "2026-06-17 01:51:29"
+    },
+    {
+      "user_id": 1,
+      "type": "badge_unlock",
+      "content": "🎉 恭喜获得成就徽章：计划达人",
+      "related_id": "plan_creator_3",
+      "related_type": "badge",
+      "from_user_id": null,
+      "is_read": "0",
+      "id": 32,
+      "created_at": "2026-06-17 01:51:29"
+    },
+    {
+      "user_id": 1,
+      "type": "badge_unlock",
+      "content": "🎉 恭喜获得成就徽章：城市探索者",
+      "related_id": "city_explorer_3",
+      "related_type": "badge",
+      "from_user_id": null,
+      "is_read": "0",
+      "id": 33,
+      "created_at": "2026-06-17 01:51:29"
+    },
+    {
+      "user_id": 1,
+      "type": "badge_unlock",
+      "content": "🎉 恭喜获得成就徽章：环球旅行家",
+      "related_id": "city_explorer_5",
+      "related_type": "badge",
+      "from_user_id": null,
+      "is_read": "0",
+      "id": 34,
+      "created_at": "2026-06-17 01:51:29"
+    },
+    {
+      "user_id": 1,
+      "type": "badge_unlock",
+      "content": "🎉 恭喜获得成就徽章：活动达人",
+      "related_id": "activity_5",
+      "related_type": "badge",
+      "from_user_id": null,
+      "is_read": "0",
+      "id": 35,
+      "created_at": "2026-06-17 01:51:29"
+    },
+    {
+      "user_id": 2,
+      "type": "badge_unlock",
+      "content": "🎉 恭喜获得成就徽章：初次发布",
+      "related_id": "first_plan",
+      "related_type": "badge",
+      "from_user_id": null,
+      "is_read": "0",
+      "id": 36,
+      "created_at": "2026-06-17 01:56:00"
+    },
+    {
+      "user_id": 2,
+      "type": "badge_unlock",
+      "content": "🎉 恭喜获得成就徽章：城市探索者",
+      "related_id": "city_explorer_3",
+      "related_type": "badge",
+      "from_user_id": null,
+      "is_read": "0",
+      "id": 37,
+      "created_at": "2026-06-17 01:56:00"
+    },
+    {
+      "user_id": 2,
+      "type": "badge_unlock",
+      "content": "🎉 恭喜获得成就徽章：环球旅行家",
+      "related_id": "city_explorer_5",
+      "related_type": "badge",
+      "from_user_id": null,
+      "is_read": "0",
+      "id": 38,
+      "created_at": "2026-06-17 01:56:00"
+    },
+    {
+      "user_id": 2,
+      "type": "badge_unlock",
+      "content": "🎉 恭喜获得成就徽章：活动达人",
+      "related_id": "activity_5",
+      "related_type": "badge",
+      "from_user_id": null,
+      "is_read": "0",
+      "id": 39,
+      "created_at": "2026-06-17 01:56:00"
+    },
+    {
+      "user_id": 3,
+      "type": "badge_unlock",
+      "content": "🎉 恭喜获得成就徽章：初次发布",
+      "related_id": "first_plan",
+      "related_type": "badge",
+      "from_user_id": null,
+      "is_read": "0",
+      "id": 40,
+      "created_at": "2026-06-17 02:00:47"
+    },
+    {
+      "user_id": 3,
+      "type": "badge_unlock",
+      "content": "🎉 恭喜获得成就徽章：城市探索者",
+      "related_id": "city_explorer_3",
+      "related_type": "badge",
+      "from_user_id": null,
+      "is_read": "0",
+      "id": 41,
+      "created_at": "2026-06-17 02:00:47"
+    },
+    {
+      "user_id": 3,
+      "type": "badge_unlock",
+      "content": "🎉 恭喜获得成就徽章：环球旅行家",
+      "related_id": "city_explorer_5",
+      "related_type": "badge",
+      "from_user_id": null,
+      "is_read": "0",
+      "id": 42,
+      "created_at": "2026-06-17 02:00:47"
+    },
+    {
+      "user_id": 3,
+      "type": "badge_unlock",
+      "content": "🎉 恭喜获得成就徽章：活动达人",
+      "related_id": "activity_5",
+      "related_type": "badge",
+      "from_user_id": null,
+      "is_read": "0",
+      "id": 43,
+      "created_at": "2026-06-17 02:00:47"
     }
   ],
   "ratings": [],
@@ -1865,6 +2354,51 @@
       "extra_data": "{\"title\":\"测试留言板的路线\",\"city\":\"上海\",\"theme\":\"老洋房巡礼\"}",
       "id": 36,
       "created_at": "2026-06-16 18:55:55"
+    },
+    {
+      "user_id": 1,
+      "type": "create_plan",
+      "related_id": 15,
+      "related_type": "plan",
+      "extra_data": "{\"title\":\"????????\",\"city\":\"??\",\"theme\":\"night\"}",
+      "id": 37,
+      "created_at": "2026-06-17 01:51:29"
+    },
+    {
+      "user_id": 1,
+      "type": "create_plan",
+      "related_id": 16,
+      "related_type": "plan",
+      "extra_data": "{\"title\":\"??????2\",\"city\":\"??\",\"theme\":\"food\"}",
+      "id": 38,
+      "created_at": "2026-06-17 01:53:49"
+    },
+    {
+      "user_id": 2,
+      "type": "join_plan",
+      "related_id": "1",
+      "related_type": "plan",
+      "extra_data": "{\"title\":\"法租界老洋房深度游\",\"city\":\"上海\",\"theme\":\"old_building\"}",
+      "id": 39,
+      "created_at": "2026-06-17 01:56:00"
+    },
+    {
+      "user_id": 3,
+      "type": "create_plan",
+      "related_id": 17,
+      "related_type": "plan",
+      "extra_data": "{\"title\":\"????????\",\"city\":\"??\",\"theme\":\"food\"}",
+      "id": 40,
+      "created_at": "2026-06-17 02:00:47"
+    },
+    {
+      "user_id": 2,
+      "type": "join_plan",
+      "related_id": "17",
+      "related_type": "plan",
+      "extra_data": "{\"title\":\"????????\",\"city\":\"??\",\"theme\":\"food\"}",
+      "id": 41,
+      "created_at": "2026-06-17 02:01:57"
     }
   ],
   "plan_updates": [],
@@ -2360,19 +2894,245 @@
       "unlocked_at": "2026-06-16 18:55:55",
       "id": 1,
       "created_at": "2026-06-16 18:55:55"
+    },
+    {
+      "user_id": 1,
+      "badge_id": "first_plan",
+      "unlocked_at": "2026-06-17 01:51:29",
+      "id": 2,
+      "created_at": "2026-06-17 01:51:29"
+    },
+    {
+      "user_id": 1,
+      "badge_id": "plan_creator_3",
+      "unlocked_at": "2026-06-17 01:51:29",
+      "id": 3,
+      "created_at": "2026-06-17 01:51:29"
+    },
+    {
+      "user_id": 1,
+      "badge_id": "city_explorer_3",
+      "unlocked_at": "2026-06-17 01:51:29",
+      "id": 4,
+      "created_at": "2026-06-17 01:51:29"
+    },
+    {
+      "user_id": 1,
+      "badge_id": "city_explorer_5",
+      "unlocked_at": "2026-06-17 01:51:29",
+      "id": 5,
+      "created_at": "2026-06-17 01:51:29"
+    },
+    {
+      "user_id": 1,
+      "badge_id": "activity_5",
+      "unlocked_at": "2026-06-17 01:51:29",
+      "id": 6,
+      "created_at": "2026-06-17 01:51:29"
+    },
+    {
+      "user_id": 2,
+      "badge_id": "first_plan",
+      "unlocked_at": "2026-06-17 01:56:00",
+      "id": 7,
+      "created_at": "2026-06-17 01:56:00"
+    },
+    {
+      "user_id": 2,
+      "badge_id": "city_explorer_3",
+      "unlocked_at": "2026-06-17 01:56:00",
+      "id": 8,
+      "created_at": "2026-06-17 01:56:00"
+    },
+    {
+      "user_id": 2,
+      "badge_id": "city_explorer_5",
+      "unlocked_at": "2026-06-17 01:56:00",
+      "id": 9,
+      "created_at": "2026-06-17 01:56:00"
+    },
+    {
+      "user_id": 2,
+      "badge_id": "activity_5",
+      "unlocked_at": "2026-06-17 01:56:00",
+      "id": 10,
+      "created_at": "2026-06-17 01:56:00"
+    },
+    {
+      "user_id": 3,
+      "badge_id": "first_plan",
+      "unlocked_at": "2026-06-17 02:00:47",
+      "id": 11,
+      "created_at": "2026-06-17 02:00:47"
+    },
+    {
+      "user_id": 3,
+      "badge_id": "city_explorer_3",
+      "unlocked_at": "2026-06-17 02:00:47",
+      "id": 12,
+      "created_at": "2026-06-17 02:00:47"
+    },
+    {
+      "user_id": 3,
+      "badge_id": "city_explorer_5",
+      "unlocked_at": "2026-06-17 02:00:47",
+      "id": 13,
+      "created_at": "2026-06-17 02:00:47"
+    },
+    {
+      "user_id": 3,
+      "badge_id": "activity_5",
+      "unlocked_at": "2026-06-17 02:00:47",
+      "id": 14,
+      "created_at": "2026-06-17 02:00:47"
+    }
+  ],
+  "plan_equipment": [
+    {
+      "plan_id": 15,
+      "name": "?????",
+      "icon": "",
+      "category": "????",
+      "is_custom": 0,
+      "sort_order": 0,
+      "id": 1,
+      "created_at": "2026-06-17 01:51:29"
+    },
+    {
+      "plan_id": 15,
+      "name": "???/??",
+      "icon": "",
+      "category": "????",
+      "is_custom": 0,
+      "sort_order": 1,
+      "id": 2,
+      "created_at": "2026-06-17 01:51:29"
+    },
+    {
+      "plan_id": 15,
+      "name": "???????",
+      "icon": "",
+      "category": "???",
+      "is_custom": 1,
+      "sort_order": 2,
+      "id": 3,
+      "created_at": "2026-06-17 01:51:29"
+    },
+    {
+      "plan_id": 16,
+      "name": "?????",
+      "icon": "",
+      "category": "????",
+      "is_custom": 0,
+      "sort_order": 0,
+      "id": 4,
+      "created_at": "2026-06-17 01:53:49"
+    },
+    {
+      "plan_id": 16,
+      "name": "??",
+      "icon": "",
+      "category": "????",
+      "is_custom": 0,
+      "sort_order": 1,
+      "id": 5,
+      "created_at": "2026-06-17 01:53:49"
+    },
+    {
+      "plan_id": 16,
+      "name": "????",
+      "icon": "",
+      "category": "????",
+      "is_custom": 0,
+      "sort_order": 2,
+      "id": 6,
+      "created_at": "2026-06-17 01:53:49"
+    },
+    {
+      "plan_id": 17,
+      "name": "?????",
+      "icon": "",
+      "category": "????",
+      "is_custom": 0,
+      "sort_order": 0,
+      "id": 8,
+      "created_at": "2026-06-17 02:00:47",
+      "is_checked": 0
+    },
+    {
+      "plan_id": 17,
+      "name": "??",
+      "icon": "",
+      "category": "????",
+      "is_custom": 0,
+      "sort_order": 1,
+      "id": 9,
+      "created_at": "2026-06-17 02:00:47",
+      "is_checked": 0
+    },
+    {
+      "plan_id": 17,
+      "name": "???",
+      "icon": "",
+      "category": "????",
+      "is_custom": 0,
+      "sort_order": 2,
+      "id": 10,
+      "created_at": "2026-06-17 02:00:47",
+      "is_checked": 0
+    },
+    {
+      "plan_id": 17,
+      "name": "????",
+      "icon": "",
+      "category": "????",
+      "is_custom": 0,
+      "sort_order": 3,
+      "id": 11,
+      "created_at": "2026-06-17 02:00:47",
+      "is_checked": 0
+    },
+    {
+      "plan_id": 17,
+      "name": "??????",
+      "icon": "",
+      "category": "???",
+      "is_custom": 1,
+      "sort_order": 4,
+      "id": 12,
+      "created_at": "2026-06-17 02:00:47",
+      "is_checked": 0
+    }
+  ],
+  "user_equipment_checks": [
+    {
+      "plan_id": "17",
+      "user_id": 2,
+      "equipment_id": 8,
+      "is_checked": 0,
+      "id": 2,
+      "created_at": "2026-06-17 02:02:15"
+    },
+    {
+      "plan_id": "17",
+      "user_id": 2,
+      "equipment_id": 9,
+      "is_checked": 1,
+      "id": 3,
+      "created_at": "2026-06-17 02:04:14"
     }
   ],
   "counters": {
     "users": 11,
-    "plans": 14,
-    "participants": 51,
+    "plans": 17,
+    "participants": 56,
     "notes": 10,
     "favorites": 11,
     "comments": 26,
-    "notifications": 30,
+    "notifications": 43,
     "ratings": 0,
     "follows": 16,
-    "feeds": 36,
+    "feeds": 41,
     "plan_updates": 0,
     "route_templates": 0,
     "photos": 18,
@@ -2383,7 +3143,9 @@
     "checkin_points": 0,
     "guide_versions": 0,
     "share_pages": 0,
-    "user_badges": 1,
-    "plan_messages": 2
+    "user_badges": 14,
+    "plan_messages": 2,
+    "plan_equipment": 12,
+    "user_equipment_checks": 3
   }
 }

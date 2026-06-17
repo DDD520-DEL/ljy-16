@@ -38,6 +38,8 @@ const defaultData = {
   checkins: [],
   badges: [],
   user_badges: [],
+  plan_equipment: [],
+  user_equipment_checks: [],
   counters: {
     users: 0,
     plans: 0,
@@ -62,7 +64,9 @@ const defaultData = {
     share_pages: 0,
     checkins: 0,
     badges: 0,
-    user_badges: 0
+    user_badges: 0,
+    plan_equipment: 0,
+    user_equipment_checks: 0
   }
 };
 
@@ -231,6 +235,8 @@ function resolveTableName(fromPart) {
     'difficulty_levels': 'difficulty_levels',
     'badges': 'badges',
     'user_badges': 'user_badges',
+    'plan_equipment': 'plan_equipment',
+    'user_equipment_checks': 'user_equipment_checks',
     'p': 'plans',
     'pp': 'participants',
     'n': 'notes',
@@ -255,7 +261,7 @@ function resolveTableName(fromPart) {
     'dl': 'difficulty_levels'
   };
   
-  const primaryMatch = fromPart.match(/^(citywalk_plans|plan_participants|route_notes|favorite_routes|note_comments|user_notifications|plan_ratings|users|user_follows|activity_feeds|plan_updates|plan_messages|route_templates|activity_photos|photo_likes|search_history|browsed_plans|route_guides|checkin_points|guide_versions|share_pages|plan_checkins|difficulty_levels)\s+(\w+)/i);
+  const primaryMatch = fromPart.match(/^(citywalk_plans|plan_participants|route_notes|favorite_routes|note_comments|user_notifications|plan_ratings|users|user_follows|activity_feeds|plan_updates|plan_messages|route_templates|activity_photos|photo_likes|search_history|browsed_plans|route_guides|checkin_points|guide_versions|share_pages|plan_checkins|difficulty_levels|badges|user_badges|plan_equipment|user_equipment_checks)\s+(\w+)/i);
   if (primaryMatch) {
     return { mainTable: tables[primaryMatch[1].toLowerCase()], mainAlias: primaryMatch[2].toLowerCase() };
   }
@@ -277,8 +283,8 @@ function handleSelect(query, args) {
   const { mainTable, mainAlias } = fromMatch ? resolveTableName(fromMatch[1].trim()) : { mainTable: 'plans', mainAlias: null };
   let mainData = db[mainTable] || [];
   
-  const joinMatches = [...query.matchAll(/LEFT\s+JOIN\s+(citywalk_plans|plan_participants|route_notes|favorite_routes|note_comments|user_notifications|plan_ratings|users|user_follows|activity_feeds|plan_updates|plan_messages|route_templates|activity_photos|photo_likes|search_history|browsed_plans|route_guides|checkin_points|guide_versions|share_pages|plan_checkins|difficulty_levels|badges|user_badges)\s+(\w+)\s+ON\s+([\w.]+)\s*=\s*([\w.]+)/gi)];
-  const tableMap = { citywalk_plans: 'plans', plan_participants: 'participants', route_notes: 'notes', favorite_routes: 'favorites', note_comments: 'comments', user_notifications: 'notifications', plan_ratings: 'ratings', users: 'users', user_follows: 'follows', activity_feeds: 'feeds', plan_updates: 'plan_updates', plan_messages: 'plan_messages', route_templates: 'route_templates', activity_photos: 'photos', photo_likes: 'photo_likes', search_history: 'search_history', browsed_plans: 'browsed_plans', route_guides: 'route_guides', checkin_points: 'checkin_points', guide_versions: 'guide_versions', share_pages: 'share_pages', plan_checkins: 'checkins', difficulty_levels: 'difficulty_levels', badges: 'badges', user_badges: 'user_badges' };
+  const joinMatches = [...query.matchAll(/LEFT\s+JOIN\s+(citywalk_plans|plan_participants|route_notes|favorite_routes|note_comments|user_notifications|plan_ratings|users|user_follows|activity_feeds|plan_updates|plan_messages|route_templates|activity_photos|photo_likes|search_history|browsed_plans|route_guides|checkin_points|guide_versions|share_pages|plan_checkins|difficulty_levels|badges|user_badges|plan_equipment|user_equipment_checks)\s+(\w+)\s+ON\s+([\w.]+)\s*=\s*([\w.]+)/gi)];
+  const tableMap = { citywalk_plans: 'plans', plan_participants: 'participants', route_notes: 'notes', favorite_routes: 'favorites', note_comments: 'comments', user_notifications: 'notifications', plan_ratings: 'ratings', users: 'users', user_follows: 'follows', activity_feeds: 'feeds', plan_updates: 'plan_updates', plan_messages: 'plan_messages', route_templates: 'route_templates', activity_photos: 'photos', photo_likes: 'photo_likes', search_history: 'search_history', browsed_plans: 'browsed_plans', route_guides: 'route_guides', checkin_points: 'checkin_points', guide_versions: 'guide_versions', share_pages: 'share_pages', plan_checkins: 'checkins', difficulty_levels: 'difficulty_levels', badges: 'badges', user_badges: 'user_badges', plan_equipment: 'plan_equipment', user_equipment_checks: 'user_equipment_checks' };
   const joins = joinMatches.map(m => ({
     table: tableMap[m[1].toLowerCase()],
     alias: m[2].toLowerCase(),
@@ -393,11 +399,11 @@ function handleSelect(query, args) {
 }
 
 function handleInsert(query, args) {
-  const tableMatch = query.match(/INSERT\s+(?:OR\s+IGNORE\s+)?INTO\s+(citywalk_plans|plan_participants|route_notes|favorite_routes|note_comments|user_notifications|plan_ratings|users|user_follows|activity_feeds|plan_updates|plan_messages|route_templates|activity_photos|photo_likes|search_history|browsed_plans|route_guides|checkin_points|guide_versions|share_pages|plan_checkins|difficulty_levels|badges|user_badges)/i);
+  const tableMatch = query.match(/INSERT\s+(?:OR\s+IGNORE\s+)?INTO\s+(citywalk_plans|plan_participants|route_notes|favorite_routes|note_comments|user_notifications|plan_ratings|users|user_follows|activity_feeds|plan_updates|plan_messages|route_templates|activity_photos|photo_likes|search_history|browsed_plans|route_guides|checkin_points|guide_versions|share_pages|plan_checkins|difficulty_levels|badges|user_badges|plan_equipment|user_equipment_checks)/i);
   if (!tableMatch) return null;
   
   const tableName = tableMatch[1].toLowerCase();
-  const table = ({ citywalk_plans: 'plans', plan_participants: 'participants', route_notes: 'notes', favorite_routes: 'favorites', note_comments: 'comments', user_notifications: 'notifications', plan_ratings: 'ratings', users: 'users', user_follows: 'follows', activity_feeds: 'feeds', plan_updates: 'plan_updates', plan_messages: 'plan_messages', route_templates: 'route_templates', activity_photos: 'photos', photo_likes: 'photo_likes', search_history: 'search_history', browsed_plans: 'browsed_plans', route_guides: 'route_guides', checkin_points: 'checkin_points', guide_versions: 'guide_versions', share_pages: 'share_pages', difficulty_levels: 'difficulty_levels', plan_checkins: 'checkins', badges: 'badges', user_badges: 'user_badges' })[tableName];
+  const table = ({ citywalk_plans: 'plans', plan_participants: 'participants', route_notes: 'notes', favorite_routes: 'favorites', note_comments: 'comments', user_notifications: 'notifications', plan_ratings: 'ratings', users: 'users', user_follows: 'follows', activity_feeds: 'feeds', plan_updates: 'plan_updates', plan_messages: 'plan_messages', route_templates: 'route_templates', activity_photos: 'photos', photo_likes: 'photo_likes', search_history: 'search_history', browsed_plans: 'browsed_plans', route_guides: 'route_guides', checkin_points: 'checkin_points', guide_versions: 'guide_versions', share_pages: 'share_pages', difficulty_levels: 'difficulty_levels', plan_checkins: 'checkins', badges: 'badges', user_badges: 'user_badges', plan_equipment: 'plan_equipment', user_equipment_checks: 'user_equipment_checks' })[tableName];
   
   const fieldsMatch = query.match(/\(([^)]+)\)\s*VALUES/i);
   if (!fieldsMatch) return null;
@@ -449,11 +455,11 @@ function handleInsert(query, args) {
 }
 
 function handleUpdate(query, args) {
-  const tableMatch = query.match(/UPDATE\s+(citywalk_plans|plan_participants|route_notes|favorite_routes|note_comments|user_notifications|plan_ratings|users|user_follows|activity_feeds|plan_updates|plan_messages|route_templates|activity_photos|photo_likes|search_history|browsed_plans|route_guides|checkin_points|guide_versions|share_pages|plan_checkins|difficulty_levels|badges|user_badges)/i);
+  const tableMatch = query.match(/UPDATE\s+(citywalk_plans|plan_participants|route_notes|favorite_routes|note_comments|user_notifications|plan_ratings|users|user_follows|activity_feeds|plan_updates|plan_messages|route_templates|activity_photos|photo_likes|search_history|browsed_plans|route_guides|checkin_points|guide_versions|share_pages|plan_checkins|difficulty_levels|badges|user_badges|plan_equipment|user_equipment_checks)/i);
   if (!tableMatch) return null;
   
   const tableName = tableMatch[1].toLowerCase();
-  const table = ({ citywalk_plans: 'plans', plan_participants: 'participants', route_notes: 'notes', favorite_routes: 'favorites', note_comments: 'comments', user_notifications: 'notifications', plan_ratings: 'ratings', users: 'users', user_follows: 'follows', activity_feeds: 'feeds', plan_updates: 'plan_updates', plan_messages: 'plan_messages', route_templates: 'route_templates', activity_photos: 'photos', photo_likes: 'photo_likes', search_history: 'search_history', browsed_plans: 'browsed_plans', route_guides: 'route_guides', checkin_points: 'checkin_points', guide_versions: 'guide_versions', share_pages: 'share_pages', difficulty_levels: 'difficulty_levels', plan_checkins: 'checkins', badges: 'badges', user_badges: 'user_badges' })[tableName];
+  const table = ({ citywalk_plans: 'plans', plan_participants: 'participants', route_notes: 'notes', favorite_routes: 'favorites', note_comments: 'comments', user_notifications: 'notifications', plan_ratings: 'ratings', users: 'users', user_follows: 'follows', activity_feeds: 'feeds', plan_updates: 'plan_updates', plan_messages: 'plan_messages', route_templates: 'route_templates', activity_photos: 'photos', photo_likes: 'photo_likes', search_history: 'search_history', browsed_plans: 'browsed_plans', route_guides: 'route_guides', checkin_points: 'checkin_points', guide_versions: 'guide_versions', share_pages: 'share_pages', difficulty_levels: 'difficulty_levels', plan_checkins: 'checkins', badges: 'badges', user_badges: 'user_badges', plan_equipment: 'plan_equipment', user_equipment_checks: 'user_equipment_checks' })[tableName];
   
   const setMatch = query.match(/SET\s+(.+?)(?:WHERE|$)/i);
   if (!setMatch) return null;
@@ -538,11 +544,11 @@ function handleUpdate(query, args) {
 }
 
 function handleDelete(query, args) {
-  const tableMatch = query.match(/DELETE\s+FROM\s+(citywalk_plans|plan_participants|route_notes|favorite_routes|note_comments|user_notifications|plan_ratings|users|user_follows|activity_feeds|plan_updates|plan_messages|route_templates|activity_photos|photo_likes|search_history|browsed_plans|route_guides|checkin_points|guide_versions|share_pages|plan_checkins|difficulty_levels|badges|user_badges)/i);
+  const tableMatch = query.match(/DELETE\s+FROM\s+(citywalk_plans|plan_participants|route_notes|favorite_routes|note_comments|user_notifications|plan_ratings|users|user_follows|activity_feeds|plan_updates|plan_messages|route_templates|activity_photos|photo_likes|search_history|browsed_plans|route_guides|checkin_points|guide_versions|share_pages|plan_checkins|difficulty_levels|badges|user_badges|plan_equipment|user_equipment_checks)/i);
   if (!tableMatch) return 0;
   
   const tableName = tableMatch[1].toLowerCase();
-  const table = ({ citywalk_plans: 'plans', plan_participants: 'participants', route_notes: 'notes', favorite_routes: 'favorites', note_comments: 'comments', user_notifications: 'notifications', plan_ratings: 'ratings', users: 'users', user_follows: 'follows', activity_feeds: 'feeds', plan_updates: 'plan_updates', plan_messages: 'plan_messages', route_templates: 'route_templates', activity_photos: 'photos', photo_likes: 'photo_likes', search_history: 'search_history', browsed_plans: 'browsed_plans', route_guides: 'route_guides', checkin_points: 'checkin_points', guide_versions: 'guide_versions', share_pages: 'share_pages', difficulty_levels: 'difficulty_levels', plan_checkins: 'checkins', badges: 'badges', user_badges: 'user_badges' })[tableName];
+  const table = ({ citywalk_plans: 'plans', plan_participants: 'participants', route_notes: 'notes', favorite_routes: 'favorites', note_comments: 'comments', user_notifications: 'notifications', plan_ratings: 'ratings', users: 'users', user_follows: 'follows', activity_feeds: 'feeds', plan_updates: 'plan_updates', plan_messages: 'plan_messages', route_templates: 'route_templates', activity_photos: 'photos', photo_likes: 'photo_likes', search_history: 'search_history', browsed_plans: 'browsed_plans', route_guides: 'route_guides', checkin_points: 'checkin_points', guide_versions: 'guide_versions', share_pages: 'share_pages', difficulty_levels: 'difficulty_levels', plan_checkins: 'checkins', badges: 'badges', user_badges: 'user_badges', plan_equipment: 'plan_equipment', user_equipment_checks: 'user_equipment_checks' })[tableName];
   
   const whereMatch = query.match(/WHERE\s+(.+)$/i);
   let argIndex = 0;

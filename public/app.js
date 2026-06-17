@@ -29,6 +29,9 @@ let currentPlanPhotos = [];
 let currentPlanMessages = [];
 let messagePollingTimer = null;
 let lastMessageTimestamp = null;
+let recommendedEquipment = [];
+let selectedEquipment = [];
+let customEquipment = [];
 
 const avatarPool = ['🧑', '👩', '👨', '👧', '👦', '🧔', '👵', '👴', '🧑‍🎨', '👨‍🍳', '👩‍💻', '🧑‍🚀', '🎨', '📷', '🎭', '🎵'];
 
@@ -1027,6 +1030,17 @@ async function openPlanDetail(planId) {
   const isFav = favoriteIds.has(plan.id);
   const canAddNote = (plan.status === 'completed' || isJoined) && currentUser;
   
+  if (isJoined && currentUser && plan.equipment) {
+    try {
+      const equipRes = await api(`${API}/plans/${planId}/equipment?user_id=${currentUser.id}`);
+      if (equipRes.success) {
+        plan.equipment = equipRes.equipment;
+      }
+    } catch (e) {
+      console.error('加载装备状态失败:', e);
+    }
+  }
+  
   const ratingsRes = await loadPlanRatings(planId);
   const ratingsStats = ratingsRes?.stats || null;
   const ratingsList = ratingsRes?.ratings || [];
@@ -1213,6 +1227,11 @@ async function openPlanDetail(planId) {
       <div class="detail-description">
         <h3>📖 路线描述</h3>
         <p>${plan.description || '暂无详细描述'}</p>
+      </div>
+
+      <div class="detail-section">
+        <h3>🎒 装备清单 ${plan.equipment && plan.equipment.length > 0 ? `(${plan.equipment.length})` : ''}</h3>
+        ${renderEquipmentChecklist(plan.equipment || [], isJoined, plan.id)}
       </div>
 
       ${hasUpdates ? `
@@ -3180,9 +3199,48 @@ async function initCreatePlanForm() {
   now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
   document.getElementById('planStartTime').min = now.toISOString().slice(0, 16);
   
+  document.getElementById('planTheme').addEventListener('change', async (e) => {
+    const themeId = e.target.value;
+    if (themeId) {
+      await loadRecommendedEquipment(themeId);
+    } else {
+      recommendedEquipment = [];
+      selectedEquipment = [];
+      renderEquipmentList();
+    }
+  });
+
+  document.getElementById('addCustomEquipBtn').addEventListener('click', () => {
+    const input = document.getElementById('customEquipName');
+    const name = input.value.trim();
+    if (!name) {
+      showToast('请输入装备名称', 'error');
+      return;
+    }
+    const newItem = {
+      name,
+      icon: '🎒',
+      category: '自定义',
+      is_custom: true
+    };
+    customEquipment.push(newItem);
+    selectedEquipment.push({ ...newItem });
+    input.value = '';
+    renderEquipmentList();
+  });
+
+  document.getElementById('customEquipName').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      document.getElementById('addCustomEquipBtn').click();
+    }
+  });
+  
   document.getElementById('createPlanForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!currentUser) return;
+    
+    const equipment = [...selectedEquipment, ...customEquipment];
     
     const data = {
       creator_id: currentUser.id,
@@ -3194,7 +3252,8 @@ async function initCreatePlanForm() {
       max_participants: parseInt(document.getElementById('planMax').value),
       meeting_point: document.getElementById('planMeeting').value,
       description: document.getElementById('planDescription').value,
-      difficulty_level: document.getElementById('planDifficultyLevel').value
+      difficulty_level: document.getElementById('planDifficultyLevel').value,
+      equipment
     };
     
     const res = await api(`${API}/plans`, {
@@ -3207,6 +3266,10 @@ async function initCreatePlanForm() {
       document.getElementById('createPlanModal').classList.add('hidden');
       e.target.reset();
       initDifficultySelector();
+      recommendedEquipment = [];
+      selectedEquipment = [];
+      customEquipment = [];
+      renderEquipmentList();
       refreshCurrentTab();
 
       if (res.plan && res.plan.new_badges && res.plan.new_badges.length > 0) {
@@ -3216,6 +3279,230 @@ async function initCreatePlanForm() {
       showToast(res.error || '发布失败', 'error');
     }
   });
+}
+
+async function loadRecommendedEquipment(themeId) {
+  try {
+    const res = await api(`${API}/themes/${themeId}/equipment`);
+    if (res.success) {
+      recommendedEquipment = res.equipment;
+      selectedEquipment = res.equipment.map(item => ({ ...item }));
+      document.getElementById('equipThemeHint').textContent = `已根据主题推荐 ${res.equipment.length} 项装备`;
+      renderEquipmentList();
+    }
+  } catch (e) {
+    console.error('加载推荐装备失败:', e);
+  }
+}
+
+function renderEquipmentList() {
+  const container = document.getElementById('equipmentList');
+  if (recommendedEquipment.length === 0 && customEquipment.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state" style="padding: 20px; text-align: center;">
+        <p style="color: var(--text-secondary); margin: 0;">请先选择主题以查看推荐装备</p>
+      </div>
+    `;
+    return;
+  }
+
+  let html = '';
+  
+  const categories = {};
+  const allEquipment = [...recommendedEquipment, ...customEquipment];
+  allEquipment.forEach(item => {
+    const cat = item.category || '其他';
+    if (!categories[cat]) categories[cat] = [];
+    categories[cat].push(item);
+  });
+
+  for (const [category, items] of Object.entries(categories)) {
+    html += `
+      <div class="equipment-category">
+        <div class="equipment-category-title">${category}</div>
+        <div class="equipment-items">
+          ${items.map(item => {
+            const isSelected = selectedEquipment.some(s => s.name === item.name) || 
+                             customEquipment.some(c => c.name === item.name);
+            const isCustom = customEquipment.some(c => c.name === item.name);
+            return `
+              <div class="equipment-item ${isSelected ? 'selected' : ''}" data-name="${item.name}" data-is-custom="${isCustom}">
+                <span class="equip-icon">${item.icon || '🎒'}</span>
+                <span class="equip-name">${item.name}</span>
+                <div class="equip-actions">
+                  ${isCustom ? `<button class="equip-remove-btn" onclick="removeCustomEquipment('${item.name}')" title="删除">×</button>` : ''}
+                  <input type="checkbox" class="equip-checkbox" 
+                         ${isSelected ? 'checked' : ''} 
+                         onchange="toggleEquipment('${item.name}', ${item.is_custom ? 'true' : 'false'})">
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  container.innerHTML = html;
+}
+
+function toggleEquipment(name, isCustom) {
+  if (isCustom) {
+    const idx = customEquipment.findIndex(c => c.name === name);
+    if (idx >= 0) {
+      customEquipment.splice(idx, 1);
+    } else {
+      const item = selectedEquipment.find(s => s.name === name);
+      if (item) customEquipment.push(item);
+    }
+  } else {
+    const idx = selectedEquipment.findIndex(s => s.name === name);
+    if (idx >= 0) {
+      selectedEquipment.splice(idx, 1);
+    } else {
+      const item = recommendedEquipment.find(r => r.name === name);
+      if (item) selectedEquipment.push({ ...item });
+    }
+  }
+  renderEquipmentList();
+}
+
+function removeCustomEquipment(name) {
+  const idx = customEquipment.findIndex(c => c.name === name);
+  if (idx >= 0) {
+    customEquipment.splice(idx, 1);
+  }
+  const selIdx = selectedEquipment.findIndex(s => s.name === name);
+  if (selIdx >= 0) {
+    selectedEquipment.splice(selIdx, 1);
+  }
+  renderEquipmentList();
+}
+
+let planEquipmentData = [];
+
+function renderEquipmentChecklist(equipment, canCheck, planId) {
+  if (!equipment || equipment.length === 0) {
+    return `
+      <div class="empty-state" style="padding: 20px; text-align: center;">
+        <div class="empty-state-icon" style="font-size: 36px;">🎒</div>
+        <p style="color: var(--text-secondary); margin: 8px 0 0 0;">暂无装备清单</p>
+      </div>
+    `;
+  }
+
+  const categories = {};
+  equipment.forEach(item => {
+    const cat = item.category || '其他';
+    if (!categories[cat]) categories[cat] = [];
+    categories[cat].push(item);
+  });
+
+  let html = '';
+  let checkedCount = 0;
+  equipment.forEach(item => {
+    if (item.is_checked) checkedCount++;
+  });
+
+  const progress = equipment.length > 0 ? Math.round((checkedCount / equipment.length) * 100) : 0;
+
+  html += `
+    <div class="equip-progress-bar">
+      <div class="equip-progress-info">
+        <span>准备进度</span>
+        <span class="equip-progress-text">${checkedCount}/${equipment.length} 项</span>
+      </div>
+      <div class="equip-progress-track">
+        <div class="equip-progress-fill" style="width: ${progress}%;"></div>
+      </div>
+    </div>
+  `;
+
+  for (const [category, items] of Object.entries(categories)) {
+    html += `
+      <div class="equip-detail-category">
+        <div class="equip-detail-category-title">${category}</div>
+        <div class="equip-detail-list">
+          ${items.map(item => {
+            const isChecked = item.is_checked;
+            return `
+              <div class="equip-detail-item ${isChecked ? 'checked' : ''}" data-equip-id="${item.id}">
+                <span class="equip-detail-icon">${item.icon || '🎒'}</span>
+                <span class="equip-detail-name">${item.name}</span>
+                ${canCheck ? `
+                  <label class="equip-detail-checkbox">
+                    <input type="checkbox" ${isChecked ? 'checked' : ''} 
+                           onchange="toggleEquipmentCheck(${planId}, ${item.id}, this.checked)">
+                    <span class="equip-checkmark"></span>
+                  </label>
+                ` : `
+                  <span class="equip-status-badge ${isChecked ? 'status-ready' : 'status-pending'}">
+                    ${isChecked ? '✓ 已准备' : '待准备'}
+                  </span>
+                `}
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  if (!canCheck) {
+    html += `
+      <div class="equip-hint">
+        <span>💡</span>
+        <span>加入计划后可逐项标记装备准备状态</span>
+      </div>
+    `;
+  }
+
+  return html;
+}
+
+async function toggleEquipmentCheck(planId, equipmentId, isChecked) {
+  if (!currentUser) return;
+  
+  try {
+    const res = await api(`${API}/plans/${planId}/equipment/check`, {
+      method: 'POST',
+      body: JSON.stringify({
+        user_id: currentUser.id,
+        equipment_id: equipmentId,
+        is_checked: isChecked
+      })
+    });
+    
+    if (res.success) {
+      if (isChecked) {
+        showToast('装备已标记为已准备 ✅', 'success');
+      } else {
+        showToast('装备已取消标记', 'info');
+      }
+      
+      if (currentDetailPlanId === planId) {
+        refreshPlanEquipment(planId);
+      }
+    } else {
+      showToast(res.error || '操作失败', 'error');
+    }
+  } catch (e) {
+    showToast('操作失败', 'error');
+    console.error(e);
+  }
+}
+
+async function refreshPlanEquipment(planId) {
+  if (!currentUser) return;
+  try {
+    const res = await api(`${API}/plans/${planId}/equipment?user_id=${currentUser.id}`);
+    if (res.success && currentDetailPlan) {
+      currentDetailPlan.equipment = res.equipment;
+      openPlanDetail(planId);
+    }
+  } catch (e) {
+    console.error('刷新装备状态失败:', e);
+  }
 }
 
 async function initAppContent() {

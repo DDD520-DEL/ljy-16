@@ -389,6 +389,29 @@
             <label>路线描述</label>
             <textarea id="planDescription" rows="4" placeholder="详细介绍一下你的Citywalk路线和亮点..."></textarea>
           </div>
+          <div class="form-group">
+            <label>
+              装备清单
+              <span class="form-hint">根据主题推荐装备，可自由勾选或自定义添加</span>
+            </label>
+            <div class="equipment-section">
+              <div class="equipment-header">
+                <span class="equipment-title">📦 推荐装备</span>
+                <span class="equipment-subtitle" id="equipThemeHint">选择主题后显示推荐装备</span>
+              </div>
+              <div id="equipmentList" class="equipment-list">
+                <div class="empty-state" style="padding: 20px; text-align: center;">
+                  <p style="color: var(--text-secondary); margin: 0;">请先选择主题以查看推荐装备</p>
+                </div>
+              </div>
+              <div class="custom-equipment-section">
+                <div class="custom-equipment-input">
+                  <input type="text" id="customEquipName" placeholder="输入自定义装备名称">
+                  <button type="button" class="btn btn-primary btn-sm" id="addCustomEquipBtn">＋ 添加</button>
+                </div>
+              </div>
+            </div>
+          </div>
           <div class="form-actions">
             <button type="button" class="btn btn-outline" id="cancelCreateBtn">取消</button>
             <button type="button" class="btn btn-outline" id="saveAsTemplateBtn">💾 存为模板</button>
