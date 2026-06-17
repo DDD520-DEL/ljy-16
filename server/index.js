@@ -68,6 +68,64 @@ app.get('/api/users/:id', (req, res) => {
   }
 });
 
+app.put('/api/users/:id', (req, res) => {
+  try {
+    const userId = req.params.id;
+    const { username, avatar, bio, city, preferred_themes, preferred_min_duration, preferred_max_duration } = req.body;
+
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+    if (!user) {
+      return res.status(404).json({ error: '用户不存在' });
+    }
+
+    const setClauses = [];
+    const params = [];
+
+    if (username !== undefined) {
+      setClauses.push('username = ?');
+      params.push(username);
+    }
+    if (avatar !== undefined) {
+      setClauses.push('avatar = ?');
+      params.push(avatar);
+    }
+    if (bio !== undefined) {
+      setClauses.push('bio = ?');
+      params.push(bio);
+    }
+    if (city !== undefined) {
+      setClauses.push('city = ?');
+      params.push(city);
+    }
+    if (preferred_themes !== undefined) {
+      setClauses.push('preferred_themes = ?');
+      params.push(preferred_themes);
+    }
+    if (preferred_min_duration !== undefined) {
+      setClauses.push('preferred_min_duration = ?');
+      params.push(preferred_min_duration);
+    }
+    if (preferred_max_duration !== undefined) {
+      setClauses.push('preferred_max_duration = ?');
+      params.push(preferred_max_duration);
+    }
+
+    if (setClauses.length === 0) {
+      return res.json({ success: true, user });
+    }
+
+    params.push(userId);
+
+    const sql = `UPDATE users SET ${setClauses.join(', ')} WHERE id = ?`;
+    db.prepare(sql).run(...params);
+
+    const updatedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+    res.json({ success: true, user: updatedUser });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/plans', (req, res) => {
   try {
     const {
@@ -827,7 +885,7 @@ app.get('/api/users/:id/pending-ratings', (req, res) => {
 
 app.get('/api/match/suggestions', (req, res) => {
   try {
-    const { user_id, city, theme, difficulty } = req.query;
+    const { user_id, city, theme, difficulty, use_preferences } = req.query;
     let sql = `
       SELECT p.*, u.username as creator_name, u.avatar as creator_avatar,
              (p.max_participants - p.current_participants) as spots_left
@@ -854,9 +912,22 @@ app.get('/api/match/suggestions', (req, res) => {
       params.push(user_id, user_id);
     }
 
-    sql += ' ORDER BY spots_left DESC, p.created_at DESC LIMIT 10';
+    sql += ' ORDER BY spots_left DESC, p.created_at DESC LIMIT 20';
 
-    const suggestions = db.prepare(sql).all(...params);
+    let suggestions = db.prepare(sql).all(...params);
+
+    let userPref = null;
+    if (user_id && use_preferences !== 'false') {
+      const user = db.prepare('SELECT * FROM users WHERE id = ?').get(user_id);
+      if (user) {
+        userPref = {
+          preferred_themes: user.preferred_themes ? user.preferred_themes.split(',').filter(t => t) : [],
+          preferred_min_duration: user.preferred_min_duration ? Number(user.preferred_min_duration) : null,
+          preferred_max_duration: user.preferred_max_duration ? Number(user.preferred_max_duration) : null,
+          user_city: user.city || ''
+        };
+      }
+    }
 
     let followedIds = new Set();
     if (user_id) {
@@ -893,17 +964,49 @@ app.get('/api/match/suggestions', (req, res) => {
       );
       s.is_from_followed = isFollowedCreator || hasFollowedParticipant;
 
+      let matchScore = 0;
+      if (userPref) {
+        if (userPref.preferred_themes.length > 0 && userPref.preferred_themes.includes(s.theme)) {
+          matchScore += 50;
+          s.is_preferred_theme = true;
+        }
+        const duration = Number(s.duration_hours || 0);
+        if (userPref.preferred_min_duration !== null && userPref.preferred_max_duration !== null) {
+          if (duration >= userPref.preferred_min_duration && duration <= userPref.preferred_max_duration) {
+            matchScore += 30;
+            s.is_preferred_duration = true;
+          }
+        } else if (userPref.preferred_min_duration !== null && duration >= userPref.preferred_min_duration) {
+          matchScore += 15;
+        } else if (userPref.preferred_max_duration !== null && duration <= userPref.preferred_max_duration) {
+          matchScore += 15;
+        }
+        if (userPref.user_city && s.city === userPref.user_city) {
+          matchScore += 20;
+        }
+      }
+      s.match_score = matchScore;
+
       delete s.creator_name;
       delete s.creator_avatar;
     });
 
-    if (user_id && followedIds.size > 0) {
+    if (userPref && (userPref.preferred_themes.length > 0 || userPref.preferred_min_duration !== null || userPref.preferred_max_duration !== null)) {
+      suggestions.sort((a, b) => {
+        if (b.match_score !== a.match_score) return b.match_score - a.match_score;
+        if (a.is_from_followed && !b.is_from_followed) return -1;
+        if (!a.is_from_followed && b.is_from_followed) return 1;
+        return (b.spots_left || 0) - (a.spots_left || 0);
+      });
+    } else if (user_id && followedIds.size > 0) {
       suggestions.sort((a, b) => {
         if (a.is_from_followed && !b.is_from_followed) return -1;
         if (!a.is_from_followed && b.is_from_followed) return 1;
         return (b.spots_left || 0) - (a.spots_left || 0);
       });
     }
+
+    suggestions = suggestions.slice(0, 10);
 
     res.json({ success: true, suggestions });
   } catch (err) {
@@ -3705,6 +3808,330 @@ app.get('/api/plans/:id/equipment/checks', (req, res) => {
     });
 
     res.json({ success: true, equipment_checks: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/guides', (req, res) => {
+  try {
+    const { city, theme, sort_by = 'composite', page = 1, limit = 20, user_id } = req.query;
+
+    let sql = `
+      SELECT rg.*, 
+             p.id as plan_id, p.title as plan_title, p.city as plan_city, p.theme as plan_theme,
+             p.current_participants, p.max_participants, p.status as plan_status,
+             p.creator_id, p.created_at as plan_created_at,
+             u.username as creator_name, u.avatar as creator_avatar
+      FROM route_guides rg
+      LEFT JOIN citywalk_plans p ON rg.plan_id = p.id
+      LEFT JOIN users u ON p.creator_id = u.id
+      WHERE rg.is_published = 1
+    `;
+
+    const guides = db.prepare(sql).all();
+
+    let filteredGuides = guides.filter(g => {
+      const planStatus = g.plan_status || g.p_status;
+      if (planStatus !== 'completed') return false;
+      const planCity = g.plan_city || g.p_city;
+      const planTheme = g.plan_theme || g.p_theme;
+      if (city && planCity !== city) return false;
+      if (theme && planTheme !== theme) return false;
+      return true;
+    });
+
+    const enrichedGuides = filteredGuides.map(g => {
+      const guideId = g.id;
+      const planId = g.plan_id || g.p_id;
+
+      const checkinPoints = db.prepare('SELECT * FROM checkin_points WHERE guide_id = ?').all(guideId);
+      const checkinPointCount = checkinPoints.length;
+
+      const allPhotos = [];
+      checkinPoints.forEach(cp => {
+        const photos = cp.photos || [];
+        if (Array.isArray(photos)) {
+          allPhotos.push(...photos);
+        }
+      });
+
+      const activityPhotos = db.prepare('SELECT * FROM activity_photos WHERE plan_id = ?').all(planId);
+      const activityPhotoCount = activityPhotos.length;
+      allPhotos.push(...activityPhotos.map(ap => ap.image_url));
+
+      const totalPhotoCount = allPhotos.length;
+      const coverImage = allPhotos[0] || '';
+
+      const ratings = db.prepare('SELECT overall FROM plan_ratings WHERE plan_id = ?').all(planId);
+      const ratingCount = ratings.length;
+      const avgRating = ratingCount > 0 
+        ? ratings.reduce((sum, r) => sum + Number(r.overall || 0), 0) / ratingCount 
+        : 0;
+
+      const notes = db.prepare('SELECT likes FROM route_notes WHERE plan_id = ?').all(planId);
+      let totalLikes = notes.reduce((sum, n) => sum + (n.likes || 0), 0);
+      const noteCount = notes.length;
+
+      let photoLikes = 0;
+      for (const ap of activityPhotos) {
+        const likeCount = db.prepare('SELECT COUNT(*) as count FROM photo_likes WHERE photo_id = ?').get(ap.id);
+        photoLikes += likeCount ? Object.values(likeCount)[0] : 0;
+      }
+      totalLikes += photoLikes;
+
+      let compositeScore = 0;
+      if (sort_by === 'composite') {
+        compositeScore = (totalLikes * 2) + (totalPhotoCount * 3) + (avgRating * 20 * ratingCount) 
+          + (noteCount * 5) + checkinPointCount * 10;
+      } else if (sort_by === 'likes') {
+        compositeScore = totalLikes;
+      } else if (sort_by === 'photos') {
+        compositeScore = totalPhotoCount;
+      } else if (sort_by === 'rating') {
+        compositeScore = avgRating * ratingCount;
+      }
+
+      return {
+        ...g,
+        id: g.id,
+        guide_id: g.id,
+        plan_id: planId,
+        title: g.title || g.p_title,
+        description: g.description || '',
+        city: g.p_city,
+        theme: g.p_theme,
+        participants_count: g.p_current_participants || 0,
+        max_participants: g.p_max_participants || 0,
+        checkin_points_count: checkinPointCount,
+        photos_count: totalPhotoCount,
+        cover_image: coverImage,
+        avg_rating: parseFloat(avgRating.toFixed(2)),
+        rating_count: ratingCount,
+        total_likes: totalLikes,
+        notes_count: noteCount,
+        composite_score: compositeScore,
+        creator: {
+          id: g.p_creator_id,
+          username: g.u_username || g.creator_name || '匿名用户',
+          avatar: g.u_avatar || g.creator_avatar || '🧑'
+        },
+        published_at: g.published_at || g.updated_at || g.created_at
+      };
+    });
+
+    enrichedGuides.sort((a, b) => {
+      if (sort_by === 'newest') {
+        return new Date(b.published_at || 0) - new Date(a.published_at || 0);
+      }
+      return b.composite_score - a.composite_score;
+    });
+
+    const total = enrichedGuides.length;
+    const start = (parseInt(page) - 1) * parseInt(limit);
+    const paginatedGuides = enrichedGuides.slice(start, start + parseInt(limit));
+
+    res.json({ 
+      success: true, 
+      guides: paginatedGuides, 
+      total,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      total_pages: Math.ceil(total / parseInt(limit))
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/guides/:guideId/publish', (req, res) => {
+  try {
+    const guideId = req.params.guideId;
+    const { user_id } = req.body;
+
+    if (!user_id) {
+      return res.status(400).json({ error: '缺少用户ID' });
+    }
+
+    const guide = db.prepare('SELECT * FROM route_guides WHERE id = ?').get(guideId);
+    if (!guide) {
+      return res.status(404).json({ error: '攻略不存在' });
+    }
+
+    const plan = db.prepare('SELECT * FROM citywalk_plans WHERE id = ?').get(guide.plan_id);
+    if (!plan) {
+      return res.status(404).json({ error: '关联计划不存在' });
+    }
+
+    if (plan.creator_id != user_id && !isPlanParticipant(guide.plan_id, user_id)) {
+      return res.status(403).json({ error: '只有活动参与者才能发布攻略' });
+    }
+
+    db.prepare('UPDATE route_guides SET is_published = 1, published_at = CURRENT_TIMESTAMP, published_by = ? WHERE id = ?')
+      .run(user_id, guideId);
+
+    const updatedGuide = db.prepare('SELECT * FROM route_guides WHERE id = ?').get(guideId);
+    res.json({ success: true, guide: updatedGuide });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/guides/:guideId/unpublish', (req, res) => {
+  try {
+    const guideId = req.params.guideId;
+    const { user_id } = req.body;
+
+    if (!user_id) {
+      return res.status(400).json({ error: '缺少用户ID' });
+    }
+
+    const guide = db.prepare('SELECT * FROM route_guides WHERE id = ?').get(guideId);
+    if (!guide) {
+      return res.status(404).json({ error: '攻略不存在' });
+    }
+
+    const plan = db.prepare('SELECT * FROM citywalk_plans WHERE id = ?').get(guide.plan_id);
+    if (plan && plan.creator_id != user_id && !isPlanParticipant(guide.plan_id, user_id)) {
+      return res.status(403).json({ error: '只有活动参与者才能操作' });
+    }
+
+    db.prepare('UPDATE route_guides SET is_published = 0 WHERE id = ?').run(guideId);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/guides/:guideId/detail', (req, res) => {
+  try {
+    const guideId = req.params.guideId;
+
+    let guide = db.prepare(`
+      SELECT rg.*, p.id as plan_id, p.title as plan_title, p.city as plan_city, 
+             p.theme as plan_theme, p.current_participants, p.max_participants,
+             p.creator_id, p.description as plan_description, p.start_time, p.duration_hours,
+             p.meeting_point, p.difficulty_level, p.status as plan_status,
+             u.username as creator_name, u.avatar as creator_avatar
+      FROM route_guides rg
+      LEFT JOIN citywalk_plans p ON rg.plan_id = p.id
+      LEFT JOIN users u ON p.creator_id = u.id
+      WHERE rg.id = ?
+    `).get(guideId);
+
+    if (!guide) {
+      return res.status(404).json({ error: '攻略不存在' });
+    }
+
+    if (guide.is_published != 1) {
+      return res.status(403).json({ error: '该攻略尚未发布' });
+    }
+
+    const planId = guide.plan_id || guide.p_id;
+
+    const checkinPoints = db.prepare(`
+      SELECT * FROM checkin_points 
+      WHERE guide_id = ? 
+      ORDER BY order_index ASC, id ASC
+    `).all(guideId).map(p => ({
+      ...p,
+      photos: Array.isArray(p.photos) ? p.photos : []
+    }));
+
+    const ratings = db.prepare(`
+      SELECT r.*, u.username, u.avatar
+      FROM plan_ratings r
+      LEFT JOIN users u ON r.user_id = u.id
+      WHERE r.plan_id = ?
+      ORDER BY r.created_at DESC
+    `).all(planId);
+
+    let avgRouteDesign = 0, avgOrganization = 0, avgPartnerFit = 0, avgOverall = 0;
+    if (ratings.length > 0) {
+      avgRouteDesign = ratings.reduce((sum, r) => sum + Number(r.route_design || 0), 0) / ratings.length;
+      avgOrganization = ratings.reduce((sum, r) => sum + Number(r.organization || 0), 0) / ratings.length;
+      avgPartnerFit = ratings.reduce((sum, r) => sum + Number(r.partner_fit || 0), 0) / ratings.length;
+      avgOverall = ratings.reduce((sum, r) => sum + Number(r.overall || 0), 0) / ratings.length;
+    }
+
+    const distribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    ratings.forEach(r => {
+      const star = Math.round(r.overall);
+      if (star >= 1 && star <= 5) distribution[star]++;
+    });
+
+    const notes = db.prepare(`
+      SELECT n.*, u.username as author_name, u.avatar as author_avatar
+      FROM route_notes n
+      LEFT JOIN users u ON n.author_id = u.id
+      WHERE n.plan_id = ?
+      ORDER BY n.created_at DESC
+    `).all(planId).map(n => ({
+      ...n,
+      author_name: n.author_name || n.u_username || '匿名用户',
+      author_avatar: n.author_avatar || n.u_avatar || '🧑'
+    }));
+
+    const photos = db.prepare(`
+      SELECT ph.*, u.username as uploader_name, u.avatar as uploader_avatar
+      FROM activity_photos ph
+      LEFT JOIN users u ON ph.user_id = u.id
+      WHERE ph.plan_id = ?
+      ORDER BY ph.created_at DESC
+    `).all(planId).map(p => ({
+      ...p,
+      uploader_name: p.uploader_name || p.u_username || '匿名用户',
+      uploader_avatar: p.uploader_avatar || p.u_avatar || '🧑'
+    }));
+
+    for (const photo of photos) {
+      const likeCount = db.prepare('SELECT COUNT(*) as count FROM photo_likes WHERE photo_id = ?').get(photo.id);
+      photo.likes_count = likeCount ? Object.values(likeCount)[0] : 0;
+    }
+
+    let totalPhotos = photos.length;
+    checkinPoints.forEach(cp => { totalPhotos += (cp.photos || []).length; });
+
+    const totalLikes = notes.reduce((sum, n) => sum + (n.likes || 0), 0) 
+      + photos.reduce((sum, p) => sum + (p.likes_count || 0), 0);
+
+    guide = {
+      ...guide,
+      plan_id: planId,
+      title: guide.title || guide.p_title,
+      description: guide.description || guide.p_description || '',
+      city: guide.p_city,
+      theme: guide.p_theme,
+      difficulty_level: guide.p_difficulty_level,
+      start_time: guide.p_start_time,
+      duration_hours: guide.p_duration_hours,
+      meeting_point: guide.p_meeting_point,
+      participants_count: guide.p_current_participants || 0,
+      checkin_points: checkinPoints,
+      ratings: ratings.map(r => ({
+        ...r,
+        user: { id: r.user_id, username: r.username || r.u_username || '匿名用户', avatar: r.avatar || r.u_avatar || '🧑' }
+      })),
+      rating_stats: {
+        count: ratings.length,
+        avg_route_design: parseFloat(avgRouteDesign.toFixed(2)),
+        avg_organization: parseFloat(avgOrganization.toFixed(2)),
+        avg_partner_fit: parseFloat(avgPartnerFit.toFixed(2)),
+        avg_overall: parseFloat(avgOverall.toFixed(2)),
+        distribution
+      },
+      notes: notes,
+      activity_photos: photos,
+      total_photos: totalPhotos,
+      total_likes: totalLikes,
+      creator: {
+        id: guide.p_creator_id,
+        username: guide.u_username || guide.creator_name || '匿名用户',
+        avatar: guide.u_avatar || guide.creator_avatar || '🧑'
+      }
+    };
+
+    res.json({ success: true, guide });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

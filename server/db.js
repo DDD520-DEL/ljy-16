@@ -85,8 +85,36 @@ function loadDB() {
         });
       }
       
+      if (Array.isArray(merged.route_guides)) {
+        merged.route_guides.forEach(guide => {
+          if (guide.is_published === undefined || guide.is_published === null) {
+            guide.is_published = 0;
+          }
+          if (!guide.published_at) {
+            guide.published_at = null;
+          }
+          if (!guide.published_by) {
+            guide.published_by = null;
+          }
+        });
+      }
+      
       if (!Array.isArray(merged.difficulty_levels) || merged.difficulty_levels.length === 0) {
         merged.difficulty_levels = defaultData.difficulty_levels;
+      }
+      
+      if (Array.isArray(merged.users)) {
+        merged.users.forEach(user => {
+          if (user.preferred_themes === undefined) {
+            user.preferred_themes = '';
+          }
+          if (user.preferred_min_duration === undefined) {
+            user.preferred_min_duration = null;
+          }
+          if (user.preferred_max_duration === undefined) {
+            user.preferred_max_duration = null;
+          }
+        });
       }
       
       return merged;

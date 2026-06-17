@@ -62,6 +62,10 @@
               <span class="nav-icon">🔥</span>
               <span class="nav-text">热门路线</span>
             </button>
+            <button class="nav-btn" data-tab="guides">
+              <span class="nav-icon">📖</span>
+              <span class="nav-text">攻略广场</span>
+            </button>
             <button class="nav-btn" data-tab="favorites">
               <span class="nav-icon">⭐</span>
               <span class="nav-text">我的收藏</span>
@@ -225,6 +229,43 @@
           <div class="popular-list" id="popularList"></div>
         </section>
 
+        <section id="guidesTab" class="tab-content">
+          <div class="guides-header">
+            <div class="guides-header-content">
+              <h2>📖 攻略广场</h2>
+              <p>探索已完成Citywalk的精选路线攻略</p>
+            </div>
+          </div>
+          <div class="guides-filter-bar">
+            <div class="filter-group">
+              <label>城市</label>
+              <select id="guidesCityFilter" class="filter-select">
+                <option value="">全部城市</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <label>主题</label>
+              <div id="guidesThemeFilter" class="theme-chips"></div>
+            </div>
+            <div class="filter-group sort-group">
+              <label>排序</label>
+              <select id="guidesSortFilter" class="filter-select">
+                <option value="composite">综合排序</option>
+                <option value="likes">最多点赞</option>
+                <option value="photos">最多照片</option>
+                <option value="rating">评分最高</option>
+                <option value="newest">最新发布</option>
+              </select>
+            </div>
+          </div>
+          <div class="guides-grid" id="guidesGrid"></div>
+          <div class="guides-empty" id="guidesEmpty" style="display: none;">
+            <div class="empty-icon">📭</div>
+            <h3>暂无攻略</h3>
+            <p>还没有已发布的Citywalk攻略，敬请期待！</p>
+          </div>
+        </section>
+
         <section id="favoritesTab" class="tab-content">
           <div class="favorites-header">
             <h2>⭐ 我的路线收藏夹</h2>
@@ -235,6 +276,10 @@
 
         <section id="mineTab" class="tab-content">
           <div class="profile-card">
+            <button class="settings-btn" id="settingsBtn" title="偏好设置">
+              <span>⚙️</span>
+              <span>设置</span>
+            </button>
             <div class="profile-left">
               <div class="profile-avatar" id="profileAvatar">🧑</div>
               <div class="profile-info">
@@ -907,6 +952,98 @@
           <button class="close-btn" onclick="closeCheckinManager()">×</button>
         </div>
         <div id="checkinManagerContent"></div>
+      </div>
+    </div>
+
+    <div id="guideDetailModal" class="modal">
+      <div class="modal-content guide-detail-modal">
+        <div class="modal-header">
+          <h2 id="guideDetailTitle">攻略详情</h2>
+          <button class="close-btn" onclick="closeGuideDetail()">×</button>
+        </div>
+        <div id="guideDetailContent"></div>
+      </div>
+    </div>
+
+    <div id="settingsModal" class="modal">
+      <div class="modal-content settings-modal">
+        <div class="modal-header">
+          <h2>⚙️ 偏好设置</h2>
+          <button class="close-btn" id="closeSettingsBtn">×</button>
+        </div>
+        <div class="settings-tabs">
+          <button class="settings-tab-btn active" data-tab="profile">
+            <span>👤</span>
+            <span>个人资料</span>
+          </button>
+          <button class="settings-tab-btn" data-tab="preferences">
+            <span>🎯</span>
+            <span>匹配偏好</span>
+          </button>
+        </div>
+        <div class="settings-body">
+          <div id="settingsProfileTab" class="settings-tab-content active">
+            <div class="settings-section">
+              <h3 class="settings-section-title">头像</h3>
+              <div class="avatar-picker" id="avatarPicker"></div>
+            </div>
+            <div class="settings-section">
+              <h3 class="settings-section-title">昵称</h3>
+              <input type="text" id="settingsUsername" class="settings-input" placeholder="请输入昵称">
+            </div>
+            <div class="settings-section">
+              <h3 class="settings-section-title">个性签名</h3>
+              <input type="text" id="settingsBio" class="settings-input" placeholder="一句话介绍自己">
+            </div>
+            <div class="settings-section">
+              <h3 class="settings-section-title">常驻城市</h3>
+              <select id="settingsCity" class="settings-select">
+                <option value="">选择城市</option>
+              </select>
+            </div>
+          </div>
+          <div id="settingsPreferencesTab" class="settings-tab-content">
+            <div class="settings-section">
+              <h3 class="settings-section-title">偏好的活动主题</h3>
+              <p class="settings-section-desc">选择你感兴趣的主题，我们会优先推荐</p>
+              <div class="theme-picker" id="themePicker"></div>
+            </div>
+            <div class="settings-section">
+              <h3 class="settings-section-title">活动时长偏好</h3>
+              <p class="settings-section-desc">设置你偏好的活动时长范围</p>
+              <div class="duration-picker">
+                <div class="duration-range">
+                  <div class="duration-input-group">
+                    <label>最小时长</label>
+                    <div class="duration-input-wrapper">
+                      <input type="number" id="settingsMinDuration" class="duration-input" value="1" min="0.5" max="24" step="0.5">
+                      <span class="duration-unit">小时</span>
+                    </div>
+                  </div>
+                  <div class="duration-divider">—</div>
+                  <div class="duration-input-group">
+                    <label>最大时长</label>
+                    <div class="duration-input-wrapper">
+                      <input type="number" id="settingsMaxDuration" class="duration-input" value="6" min="0.5" max="24" step="0.5">
+                      <span class="duration-unit">小时</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="duration-presets">
+                  <button class="duration-preset-btn" data-min="1" data-max="3">1-3小时</button>
+                  <button class="duration-preset-btn" data-min="2" data-max="4">2-4小时</button>
+                  <button class="duration-preset-btn" data-min="3" data-max="6">3-6小时</button>
+                  <button class="duration-preset-btn" data-min="4" data-max="8">4-8小时</button>
+                  <button class="duration-preset-btn" data-min="0" data-max="0">不限</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="settings-footer">
+          <button class="btn btn-outline" id="cancelSettingsBtn">取消</button>
+          <button class="btn btn-primary" id="saveSettingsBtn">保存设置 ✨</button>
+        </div>
       </div>
     </div>
   </div>

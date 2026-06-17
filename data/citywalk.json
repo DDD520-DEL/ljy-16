@@ -2720,8 +2720,364 @@
       "created_at": "2026-06-16 18:55:56"
     }
   ],
-  "route_guides": [],
-  "checkin_points": [],
+  "route_guides": [
+    {
+      "id": 1,
+      "plan_id": 5,
+      "title": "永康路咖啡一条街漫游攻略",
+      "description": "这条路线精选了永康路及周边5家各具特色的独立咖啡馆，从早C晚A的网红店到深藏巷弄的家庭式小铺，每一家都有自己的故事。建议下午2点开始，每家停留约40分钟，慢慢品味城市的咖啡文化。",
+      "created_by": 1,
+      "updated_by": 1,
+      "is_published": 1,
+      "published_at": "2026-06-15 10:30:00",
+      "published_by": 1,
+      "created_at": "2026-06-14 18:00:00",
+      "updated_at": "2026-06-15 10:30:00"
+    },
+    {
+      "id": 2,
+      "plan_id": 7,
+      "title": "南锣鼓巷胡同深度游攻略",
+      "description": "避开主街的人流，钻进南锣鼓巷旁边的支胡同，看真正的老北京生活。从菊儿胡同到雨儿胡同，从齐白石故居到婉容旧宅，每一条胡同都有历史的回响。途中还会经过几家藏在胡同里的私房菜馆和独立书店。",
+      "created_by": 6,
+      "updated_by": 6,
+      "is_published": 1,
+      "published_at": "2026-06-12 14:20:00",
+      "published_by": 6,
+      "created_at": "2026-06-11 20:00:00",
+      "updated_at": "2026-06-12 14:20:00"
+    },
+    {
+      "id": 3,
+      "plan_id": 9,
+      "title": "宽窄巷子文艺漫步攻略",
+      "description": "从宽巷子到窄巷子，再到井巷子，体验老成都的慢生活节奏。不仅有传统的茶馆、采耳、川剧变脸，还有很多新开的文艺小店、手作工坊和设计感十足的咖啡馆。建议预留半天时间，慢慢逛慢慢品。",
+      "created_by": 7,
+      "updated_by": 7,
+      "is_published": 1,
+      "published_at": "2026-06-14 09:15:00",
+      "published_by": 7,
+      "created_at": "2026-06-13 21:00:00",
+      "updated_at": "2026-06-14 09:15:00"
+    },
+    {
+      "id": 4,
+      "plan_id": 12,
+      "title": "西湖断桥至苏堤春晓攻略",
+      "description": "经典西湖步行路线，断桥残雪→白堤→苏堤，感受诗意江南。最佳游览时间是清晨或傍晚，人少景美。沿途经过平湖秋月、曲院风荷等经典景点，还可以在苏堤尽头乘船游览三潭印月。全程约5公里，平路好走，适合全家出游。",
+      "created_by": 9,
+      "updated_by": 9,
+      "is_published": 1,
+      "published_at": "2026-06-16 08:00:00",
+      "published_by": 9,
+      "created_at": "2026-06-15 19:30:00",
+      "updated_at": "2026-06-16 08:00:00"
+    }
+  ],
+  "checkin_points": [
+    {
+      "id": 1,
+      "guide_id": 1,
+      "name": "村口大树咖啡",
+      "description": "永康路的标志性咖啡馆，门口真的有一棵大树。店内是工业风装修，吧台设计很有特色。招牌是手冲耶加雪菲，果酸明亮，尾韵回甘。",
+      "location": "永康路46号",
+      "order_index": 0,
+      "collective_review": "大家一致认为环境超棒，坐在门口大树下喝咖啡是必体验项目。手冲品质稳定，但周末人多可能需要排队。",
+      "travel_tips": "建议工作日前往，周末下午1点到4点人流量大。室内座位不多，推荐户外座位。",
+      "photos": [
+        "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=600",
+        "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=600"
+      ],
+      "created_at": "2026-06-14 18:10:00",
+      "updated_at": "2026-06-14 18:10:00"
+    },
+    {
+      "id": 2,
+      "guide_id": 1,
+      "name": "Akimbo Cafe",
+      "description": "藏在弄堂里的设计感咖啡馆，以白色和原木色调为主，拍照很出片。他们家的特调咖啡很有创意，会根据季节推出限定款。",
+      "location": "永康路58号",
+      "order_index": 1,
+      "collective_review": "店内空间设计令人惊艳，每个角落都适合拍照。特调咖啡颜值和味道都在线，但价格稍高。",
+      "travel_tips": "二楼有个小露台很舒服，可以坐很久。可以点他们的季节限定特调。",
+      "photos": [
+        "https://images.unsplash.com/photo-1559925393-8be0ec4767c8?w=600"
+      ],
+      "created_at": "2026-06-14 18:15:00",
+      "updated_at": "2026-06-14 18:15:00"
+    },
+    {
+      "id": 3,
+      "guide_id": 1,
+      "name": "Small Arms Big Heart",
+      "description": "社区型家庭式咖啡馆，老板是一对夫妻。店内有很多复古小摆件和老上海的物件，氛围温馨得像家一样。",
+      "location": "嘉善路259号",
+      "order_index": 2,
+      "collective_review": "最喜欢这家的氛围，老板人超nice。拿铁奶泡绵密，豆子是自己烘的，很有特色。",
+      "travel_tips": "店内座位不多，最好避开高峰时段。可以和老板聊聊咖啡故事，他们很热情。",
+      "photos": [],
+      "created_at": "2026-06-14 18:20:00",
+      "updated_at": "2026-06-14 18:20:00"
+    },
+    {
+      "id": 4,
+      "guide_id": 1,
+      "name": "T12 Lab",
+      "description": "从永康路散步到襄阳南路，这家是精品咖啡爱好者的朝圣之地。他们的豆子非常专业，可以选择不同产区和烘焙度。",
+      "location": "襄阳南路120号",
+      "order_index": 3,
+      "collective_review": "上海精品咖啡的代表，手冲确实是顶级水平。店内简洁的工业风，专注于咖啡本身。",
+      "travel_tips": "可以让咖啡师推荐适合自己口味的豆子。如果喜欢可以买包豆子回家。",
+      "photos": [
+        "https://images.unsplash.com/photo-1453614512568-c4024d13c247?w=600"
+      ],
+      "created_at": "2026-06-14 18:25:00",
+      "updated_at": "2026-06-14 18:25:00"
+    },
+    {
+      "id": 5,
+      "guide_id": 1,
+      "name": "Manner Coffee 旗舰店",
+      "description": "上海本土连锁咖啡品牌的旗舰店，比普通门店大很多，有手冲和特调专区。性价比高，是咖啡日常的好选择。",
+      "location": "南昌路531号",
+      "order_index": 4,
+      "collective_review": "Manner的品质一直在线，旗舰店选择更多。冰燕麦拿铁是大家的最爱，口感丝滑。",
+      "travel_tips": "可以自带杯减5元，环保又实惠。旗舰店周边产品也很丰富。",
+      "photos": [],
+      "created_at": "2026-06-14 18:30:00",
+      "updated_at": "2026-06-14 18:30:00"
+    },
+    {
+      "id": 6,
+      "guide_id": 2,
+      "name": "南锣鼓巷南口牌坊",
+      "description": "集合点在南锣鼓巷南口的标志性牌坊下，这里是整条胡同的起点。虽然主街商业化严重，但一定要记得往后走，支胡同才是精华。",
+      "location": "南锣鼓巷南口",
+      "order_index": 0,
+      "collective_review": "牌坊是必打卡点，周末人多拍照需要等位。建议避开主路，直接从旁边的胡同进入。",
+      "travel_tips": "地铁南锣鼓巷站出来就是。周末人流量大，建议工作日前往。",
+      "photos": [
+        "https://images.unsplash.com/photo-1547981609-4b6bfe67ca0b?w=600"
+      ],
+      "created_at": "2026-06-11 20:10:00",
+      "updated_at": "2026-06-11 20:10:00"
+    },
+    {
+      "id": 7,
+      "guide_id": 2,
+      "name": "菊儿胡同",
+      "description": "南锣鼓巷最有名的支胡同之一，这里有北京第一批四合院改造的新四合院建筑，建筑师吴良镛的作品。还能看到老北京的真实生活场景。",
+      "location": "菊儿胡同",
+      "order_index": 1,
+      "collective_review": "走在菊儿胡同能看到很多有趣的建筑，新老四合院的对比很有意思。路上还遇到了晒太阳的大爷大妈，很有生活气息。",
+      "travel_tips": "注意保持安静，这里是居民生活区，不要打扰当地居民的正常生活。",
+      "photos": [
+        "https://images.unsplash.com/photo-1545893835-abaa50cbe628?w=600"
+      ],
+      "created_at": "2026-06-11 20:15:00",
+      "updated_at": "2026-06-11 20:15:00"
+    },
+    {
+      "id": 8,
+      "guide_id": 2,
+      "name": "雨儿胡同 齐白石旧居",
+      "description": "国画大师齐白石曾经居住过的地方，现在是一个小型纪念馆。院子不大但很雅致，保留了老北京四合院的格局。",
+      "location": "雨儿胡同13号",
+      "order_index": 2,
+      "collective_review": "喜欢艺术的朋友一定不能错过，虽然展品不算多，但能感受大师曾经生活的地方。院子很安静，很有氛围感。",
+      "travel_tips": "门票免费但需要登记，开放时间是9:00-17:00，周一闭馆。",
+      "photos": [],
+      "created_at": "2026-06-11 20:20:00",
+      "updated_at": "2026-06-11 20:20:00"
+    },
+    {
+      "id": 9,
+      "guide_id": 2,
+      "name": "文宇奶酪店",
+      "description": "北京老字号甜品店，藏在胡同里的美味。双皮奶和奶酪是招牌，口感细腻顺滑，甜度适中。",
+      "location": "南锣鼓巷49号",
+      "order_index": 3,
+      "collective_review": "逛累了来碗双皮奶太舒服了！红豆双皮奶是经典，奶味很足，不腻。环境就是老北京小店的样子。",
+      "travel_tips": "店面不大，经常需要排队。可以买了边走边吃，推荐原味和红豆味。",
+      "photos": [
+        "https://images.unsplash.com/photo-1488477181946-6428a0291777?w=600"
+      ],
+      "created_at": "2026-06-11 20:25:00",
+      "updated_at": "2026-06-11 20:25:00"
+    },
+    {
+      "id": 10,
+      "guide_id": 2,
+      "name": "胡同茶舍",
+      "description": "在胡同深处的一家老茶馆，可以体验老北京的大碗茶和盖碗茶。坐在院子里喝茶聊天，感觉时光都慢下来了。",
+      "location": "帽儿胡同",
+      "order_index": 4,
+      "collective_review": "很有老北京特色的体验，盖碗茶配小点心，坐在四合院的树下，太惬意了。老板还会讲讲胡同的历史故事。",
+      "travel_tips": "可以在这里休息放松一下，人均消费不贵。推荐尝试茉莉花茶。",
+      "photos": [
+        "https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=600",
+        "https://images.unsplash.com/photo-1544787219-7f47ccb76574?w=600"
+      ],
+      "created_at": "2026-06-11 20:30:00",
+      "updated_at": "2026-06-11 20:30:00"
+    },
+    {
+      "id": 11,
+      "guide_id": 3,
+      "name": "宽巷子入口",
+      "description": "宽窄巷子的起点，宽巷子是老成都的代表，这里可以看到清朝遗留下来的建筑风格。建议先逛宽巷子，再逛窄巷子，最后走井巷子。",
+      "location": "宽巷子南口",
+      "order_index": 0,
+      "collective_review": "宽巷子相对更商业化一些，但建筑本身很有历史感。每家店的门头都很有特色，适合慢慢逛慢慢拍。",
+      "travel_tips": "建议上午9点前或下午5点后去，人相对少一些。带好充电宝，拍照很费电。",
+      "photos": [
+        "https://images.unsplash.com/photo-1590103513924-6be5415828c9?w=600"
+      ],
+      "created_at": "2026-06-13 21:10:00",
+      "updated_at": "2026-06-13 21:10:00"
+    },
+    {
+      "id": 12,
+      "guide_id": 3,
+      "name": "见山书局",
+      "description": "藏在宽窄巷子中的独立书店，店内设计很有禅意，以川蜀文化为主题。不仅有书，还有很多文创产品和原创设计。",
+      "location": "宽巷子12号",
+      "order_index": 1,
+      "collective_review": "在热闹的巷子里有这样一家安静的书店很难得。文创产品很有成都特色，适合买纪念品。可以在二楼坐一坐，看街景。",
+      "travel_tips": "二楼有座位可以休息，点一杯茶坐一下午都可以。明信片很有特色，可以寄给朋友。",
+      "photos": [
+        "https://images.unsplash.com/photo-1507842217343-583bb7270b66?w=600"
+      ],
+      "created_at": "2026-06-13 21:15:00",
+      "updated_at": "2026-06-13 21:15:00"
+    },
+    {
+      "id": 13,
+      "guide_id": 3,
+      "name": "龙堂客栈茶馆",
+      "description": "百年老宅改造的四合院茶馆，可以体验正宗的盖碗茶和川剧变脸表演。环境古色古香，很有老成都的味道。",
+      "location": "窄巷子27号",
+      "order_index": 2,
+      "collective_review": "川剧变脸表演太精彩了！虽然是旅游景点项目，但演员很专业。盖碗茶配瓜子花生，坐一下午体验成都慢生活。",
+      "travel_tips": "变脸表演有固定时间，建议提前确认。周末人多，最好提前预定座位。",
+      "photos": [
+        "https://images.unsplash.com/photo-1528291151377-165f5107c82a?w=600"
+      ],
+      "created_at": "2026-06-13 21:20:00",
+      "updated_at": "2026-06-13 21:20:00"
+    },
+    {
+      "id": 14,
+      "guide_id": 3,
+      "name": "窄巷子手作工坊",
+      "description": "几家连在一起的手作小店，可以体验银饰锻造、蜀绣、陶艺等传统手工艺。店家都很耐心，可以亲手做一件纪念品带走。",
+      "location": "窄巷子中段",
+      "order_index": 3,
+      "collective_review": "蜀绣体验超有趣，老师很耐心，虽然绣的不太好但是自己做的很有意义。银饰锻造也很推荐，可以做一对情侣戒指。",
+      "travel_tips": "手作体验需要预留1-2小时，建议提前预约。作品有的可以当场带走，有的需要邮寄。",
+      "photos": [
+        "https://images.unsplash.com/photo-1452860606245-08befc0ff44b?w=600",
+        "https://images.unsplash.com/photo-1513475382585-d06e58bcb0e0?w=600"
+      ],
+      "created_at": "2026-06-13 21:25:00",
+      "updated_at": "2026-06-13 21:25:00"
+    },
+    {
+      "id": 15,
+      "guide_id": 3,
+      "name": "井巷子小吃街",
+      "description": "井巷子是宽窄巷子中最接地气的一条，聚集了成都各种特色小吃。钵钵鸡、三大炮、糖油果子、蛋烘糕...每样都想尝一口！",
+      "location": "井巷子",
+      "order_index": 4,
+      "collective_review": "吃货的天堂！糖油果子外酥里嫩超好吃，钵钵鸡正宗川味很过瘾，蛋烘糕要趁热吃。建议每样少买点多尝几样。",
+      "travel_tips": "价格比外面稍贵但可以接受。推荐：糖油果子、蛋烘糕、凉糕、钵钵鸡。可以边走边吃。",
+      "photos": [
+        "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=600",
+        "https://images.unsplash.com/photo-1563245372-f21724e3856d?w=600"
+      ],
+      "created_at": "2026-06-13 21:30:00",
+      "updated_at": "2026-06-13 21:30:00"
+    },
+    {
+      "id": 16,
+      "guide_id": 4,
+      "name": "断桥残雪",
+      "description": "西湖著名景点，白娘子和许仙相遇的地方。断桥是一座石拱桥，桥畔有御碑亭，『断桥残雪』是乾隆御笔。冬季雪后景色最佳，但晴日也别有风味。",
+      "location": "北山街东段",
+      "order_index": 0,
+      "collective_review": "虽然人很多，但站在断桥上看西湖真的很美。一边是宝石山，一边是白堤，湖光山色尽收眼底。一定要拍几张照片。",
+      "travel_tips": "早上7点前到可以避开人流，拍照也更好看。可以在附近租自行车，但白堤上只能步行。",
+      "photos": [
+        "https://images.unsplash.com/photo-1592828009812-b7c53af6ccf4?w=600",
+        "https://images.unsplash.com/photo-1599707367072-cd6ada2bc375?w=600"
+      ],
+      "created_at": "2026-06-15 19:40:00",
+      "updated_at": "2026-06-15 19:40:00"
+    },
+    {
+      "id": 17,
+      "guide_id": 4,
+      "name": "白堤（平湖秋月）",
+      "description": "从断桥延伸而来的长堤，两边是垂柳和桃花。春天桃柳夹岸最美，秋天则是金黄一片。平湖秋月是最佳赏月点，视野开阔。",
+      "location": "白堤中段",
+      "order_index": 1,
+      "collective_review": "西湖最美的一段路，慢慢走感觉时间都变慢了。风吹着柳条，湖面波光粼粼，心情特别好。平湖秋月那一片湖面特别开阔。",
+      "travel_tips": "全程步行约20分钟，路上有石凳可以休息。春季3-4月桃花盛开最美，秋季10-11月看金黄银杏。",
+      "photos": [
+        "https://images.unsplash.com/photo-1537531383496-f4749b8032cf?w=600"
+      ],
+      "created_at": "2026-06-15 19:45:00",
+      "updated_at": "2026-06-15 19:45:00"
+    },
+    {
+      "id": 18,
+      "guide_id": 4,
+      "name": "曲院风荷",
+      "description": "西湖十景之一，以夏日观荷为主题。景区内有大大小小数个荷塘，品种繁多的荷花。还可以参观岳王庙，感受历史文化。",
+      "location": "北山街与苏堤交汇处",
+      "order_index": 2,
+      "collective_review": "夏天荷花盛开的时候真的太美了！大片大片的荷花池，出片率超高。九曲桥上走一走，仿佛人在画中游。",
+      "travel_tips": "6-8月是荷花最佳观赏期。可以带一些面包屑喂湖里的锦鲤，小朋友很喜欢。岳王庙值得一看。",
+      "photos": [
+        "https://images.unsplash.com/photo-1564507004898-274626d109c5?w=600",
+        "https://images.unsplash.com/photo-1599921841143-84ba7058cd3b?w=600"
+      ],
+      "created_at": "2026-06-15 19:50:00",
+      "updated_at": "2026-06-15 19:50:00"
+    },
+    {
+      "id": 19,
+      "guide_id": 4,
+      "name": "苏堤春晓",
+      "description": "苏东坡任杭州知州时疏浚西湖修筑的长堤，全长2.8公里，堤上有六座石拱桥。六桥烟柳是西湖经典景色，尤其以春天最美。",
+      "location": "西山路东侧",
+      "order_index": 3,
+      "collective_review": "苏堤真的很适合慢慢走，沿途每座桥都有不同的风景。两边柳树成荫，夏天也不会太晒。走累了可以坐观光车返回。",
+      "travel_tips": "可以租自行车骑行苏堤，会省力很多。沿途有多处亲水平台可以拍照。尽头是花港观鱼，可以继续游览。",
+      "photos": [
+        "https://images.unsplash.com/photo-1518173946687-a4c0369a1f1a?w=600",
+        "https://images.unsplash.com/photo-1598887142487-3c854d51eabb?w=600",
+        "https://images.unsplash.com/photo-1528127269322-539801943592?w=600"
+      ],
+      "created_at": "2026-06-15 19:55:00",
+      "updated_at": "2026-06-15 19:55:00"
+    },
+    {
+      "id": 20,
+      "guide_id": 4,
+      "name": "花港观鱼码头",
+      "description": "苏堤的南端终点，可以在此乘船游览西湖，前往三潭印月（小瀛洲）。花港观鱼本身也是一个美丽的园林，红鱼池、牡丹园都值得一看。",
+      "location": "苏堤南口花港公园内",
+      "order_index": 4,
+      "collective_review": "西湖游船必体验！在船上看西湖的角度完全不同，三潭印月就是一元人民币背面的图案，很有纪念意义。",
+      "travel_tips": "船票55元包含三潭印月岛门票，返程可以选择不同码头下船。建议预留1-2小时游览岛上。",
+      "photos": [
+        "https://images.unsplash.com/photo-1558980664-10ea2fbf5f62?w=600"
+      ],
+      "created_at": "2026-06-15 20:00:00",
+      "updated_at": "2026-06-15 20:00:00"
+    }
+  ],
   "guide_versions": [],
   "share_pages": [],
   "checkins": [],
@@ -3139,8 +3495,8 @@
     "photo_likes": 20,
     "search_history": 0,
     "browsed_plans": 2,
-    "route_guides": 0,
-    "checkin_points": 0,
+    "route_guides": 4,
+    "checkin_points": 20,
     "guide_versions": 0,
     "share_pages": 0,
     "user_badges": 14,

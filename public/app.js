@@ -33,6 +33,13 @@ let recommendedEquipment = [];
 let selectedEquipment = [];
 let customEquipment = [];
 
+let currentGuidesCityFilter = '';
+let currentGuidesThemeFilter = '';
+let currentGuidesSortBy = 'composite';
+let currentGuidesPage = 1;
+let currentGuidesData = [];
+let currentDetailGuideId = null;
+
 const avatarPool = ['🧑', '👩', '👨', '👧', '👦', '🧔', '👵', '👴', '🧑‍🎨', '👨‍🍳', '👩‍💻', '🧑‍🚀', '🎨', '📷', '🎭', '🎵'];
 
 function getRandomAvatar() {
@@ -207,7 +214,7 @@ async function populateCitySelects() {
   const res = await api(`${API}/cities`);
   if (res.success) {
     const cities = res.cities;
-    ['filterCity', 'matchCity', 'popularCity', 'planCity', 'editTemplateCity', 'publicTemplateCity'].forEach(id => {
+    ['filterCity', 'matchCity', 'popularCity', 'guidesCityFilter', 'planCity', 'editTemplateCity', 'publicTemplateCity', 'settingsCity'].forEach(id => {
       const sel = document.getElementById(id);
       if (!sel) return;
       const firstOption = sel.querySelector('option');
@@ -3152,6 +3159,7 @@ function refreshCurrentTab() {
       break;
     case 'match': loadMatchSuggestions(); break;
     case 'popular': loadPopularRoutes(); break;
+    case 'guides': loadGuides(); break;
     case 'favorites': loadFavorites(); break;
     case 'mine': loadMyPlans(); break;
   }
@@ -3515,9 +3523,11 @@ async function initAppContent() {
   await populateCitySelects();
   await populateThemeSelects();
   renderThemeFilter();
+  renderGuidesThemeFilter();
   renderDifficultyFilter();
   initDifficultySelector();
   initTimelineFilter();
+  initGuidesFilters();
   
   if (currentUser) {
     const favRes = await api(`${API}/users/${currentUser.id}/favorites`);
@@ -4171,6 +4181,10 @@ async function init() {
   document.getElementById('versionHistoryModal').classList.add('hidden');
   document.getElementById('shareGeneratorModal').classList.add('hidden');
   document.getElementById('shareResultModal').classList.add('hidden');
+  document.getElementById('uploadPhotoModal').classList.add('hidden');
+  document.getElementById('checkinManagerModal').classList.add('hidden');
+  document.getElementById('guideDetailModal').classList.add('hidden');
+  document.getElementById('settingsModal').classList.add('hidden');
   document.getElementById('toast').classList.add('hidden');
   
   initEventListeners();
@@ -4180,6 +4194,7 @@ async function init() {
   initFollowModalEvents();
   initCalendarEvents();
   initGuideEditor();
+  initSettingsEvents();
   
   const savedUser = loadUser();
   if (savedUser) {
@@ -5230,6 +5245,673 @@ async function refreshWeather() {
   await loadWeatherForPlan();
   const icon = document.getElementById('weatherRefreshIcon');
   if (icon) icon.classList.remove('spinning');
+}
+
+function renderGuidesThemeFilter() {
+  const container = document.getElementById('guidesThemeFilter');
+  if (!container) return;
+
+  container.innerHTML = `<div class="theme-chip ${currentGuidesThemeFilter === '' ? 'active' : ''}" data-guide-theme="">全部</div>` +
+    themes.map(t => `
+      <div class="theme-chip ${currentGuidesThemeFilter === t.id ? 'active' : ''}" 
+           data-guide-theme="${t.id}" 
+           style="color: ${t.color}; background: ${currentGuidesThemeFilter === t.id ? t.color + '15' : 'var(--bg)'}">
+        <span>${t.icon}</span>
+        <span>${t.name}</span>
+      </div>
+    `).join('');
+
+  container.querySelectorAll('.theme-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      currentGuidesThemeFilter = chip.dataset.guideTheme;
+      renderGuidesThemeFilter();
+      currentGuidesPage = 1;
+      loadGuides();
+    });
+  });
+}
+
+function initGuidesFilters() {
+  const citySelect = document.getElementById('guidesCityFilter');
+  if (citySelect) {
+    citySelect.addEventListener('change', () => {
+      currentGuidesCityFilter = citySelect.value;
+      currentGuidesPage = 1;
+      loadGuides();
+    });
+  }
+
+  const sortSelect = document.getElementById('guidesSortFilter');
+  if (sortSelect) {
+    sortSelect.addEventListener('change', () => {
+      currentGuidesSortBy = sortSelect.value;
+      currentGuidesPage = 1;
+      loadGuides();
+    });
+  }
+
+  const guideDetailModal = document.getElementById('guideDetailModal');
+  if (guideDetailModal) {
+    guideDetailModal.addEventListener('click', (e) => {
+      if (e.target.id === 'guideDetailModal') closeGuideDetail();
+    });
+  }
+}
+
+function renderGuideCard(guide) {
+  const theme = getThemeInfo(guide.theme);
+  const hasRating = guide.avg_rating && guide.rating_count > 0;
+  const coverHtml = guide.cover_image 
+    ? `<img src="${guide.cover_image}" alt="${guide.title}">`
+    : `<div class="guide-card-cover-placeholder">${theme.icon}</div>`;
+
+  const ratingHtml = hasRating ? `
+    <div class="guide-card-rating">
+      <span>★</span>
+      <span>${guide.avg_rating.toFixed(1)}</span>
+    </div>
+  ` : '';
+
+  const creator = guide.creator || {};
+
+  return `
+    <div class="guide-card" data-guide-id="${guide.guide_id || guide.id}">
+      <div class="guide-card-cover">
+        ${coverHtml}
+        <div class="guide-card-badge" style="color: ${theme.color}; background: ${theme.color}20;">
+          ${theme.icon} ${theme.name}
+        </div>
+        ${ratingHtml}
+      </div>
+      <div class="guide-card-body">
+        <h3 class="guide-card-title">${guide.title}</h3>
+        <div class="guide-card-meta">
+          <span class="guide-card-meta-item city">📍 ${guide.city || '未知城市'}</span>
+          ${guide.duration_hours ? `<span class="guide-card-meta-item">⏱ ${guide.duration_hours}h</span>` : ''}
+          <span class="guide-card-meta-item">📍 ${guide.checkin_points_count || 0} 打卡点</span>
+        </div>
+        <div class="guide-card-stats">
+          <span class="guide-card-stat">
+            <span>👥</span>
+            <strong>${guide.participants_count || 0}</strong>
+            <span>人参与</span>
+          </span>
+          <span class="guide-card-stat">
+            <span>❤️</span>
+            <strong>${guide.total_likes || 0}</strong>
+          </span>
+          <span class="guide-card-stat">
+            <span>📸</span>
+            <strong>${guide.photos_count || 0}</strong>
+          </span>
+        </div>
+        ${hasRating ? `
+          <div class="guide-card-stats" style="padding-top: 10px; border-top: 1px solid var(--border-light); margin-top: 4px;">
+            <span class="guide-card-stat">
+              <span>★</span>
+              <strong style="color:#f59e0b;">${guide.avg_rating.toFixed(1)}</strong>
+              <span>(${guide.rating_count}评)</span>
+            </span>
+          </div>
+        ` : ''}
+        <div class="guide-card-creator">
+          <div class="guide-card-creator-avatar">${creator.avatar || '🧑'}</div>
+          <span class="guide-card-creator-name">${creator.username || '匿名用户'}</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function loadGuides() {
+  const grid = document.getElementById('guidesGrid');
+  const empty = document.getElementById('guidesEmpty');
+  if (!grid) return;
+
+  const params = new URLSearchParams();
+  if (currentGuidesCityFilter) params.set('city', currentGuidesCityFilter);
+  if (currentGuidesThemeFilter) params.set('theme', currentGuidesThemeFilter);
+  params.set('sort_by', currentGuidesSortBy);
+  params.set('page', currentGuidesPage);
+  params.set('limit', 30);
+  if (currentUser) params.set('user_id', currentUser.id);
+
+  grid.innerHTML = `
+    <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-secondary);">
+      <div style="font-size: 32px; margin-bottom: 8px;">⏳</div>
+      <div>加载中...</div>
+    </div>
+  `;
+
+  try {
+    const res = await api(`${API}/guides?${params}`);
+
+    if (res.success && res.guides.length > 0) {
+      currentGuidesData = res.guides;
+      grid.innerHTML = res.guides.map(g => renderGuideCard(g)).join('');
+      grid.querySelectorAll('.guide-card').forEach(card => {
+        card.addEventListener('click', () => {
+          const guideId = card.dataset.guideId;
+          openGuideDetail(guideId);
+        });
+      });
+      grid.style.display = '';
+      empty.style.display = 'none';
+    } else {
+      currentGuidesData = [];
+      grid.innerHTML = '';
+      grid.style.display = 'none';
+      empty.style.display = '';
+    }
+  } catch (e) {
+    grid.innerHTML = `
+      <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-secondary);">
+        <div style="font-size: 32px; margin-bottom: 8px;">⚠️</div>
+        <div>加载失败，请稍后重试</div>
+      </div>
+    `;
+    console.error('加载攻略列表失败:', e);
+  }
+}
+
+async function openGuideDetail(guideId) {
+  if (!guideId) return;
+  currentDetailGuideId = guideId;
+
+  const modal = document.getElementById('guideDetailModal');
+  const content = document.getElementById('guideDetailContent');
+  const titleEl = document.getElementById('guideDetailTitle');
+
+  modal.classList.remove('hidden');
+  titleEl.textContent = '攻略详情';
+  content.innerHTML = `
+    <div style="padding: 60px 20px; text-align: center; color: var(--text-secondary);">
+      <div style="font-size: 48px; margin-bottom: 12px;">⏳</div>
+      <div>正在加载攻略详情...</div>
+    </div>
+  `;
+
+  try {
+    const res = await api(`${API}/guides/${guideId}/detail`);
+    if (res.success) {
+      renderGuideDetail(res.guide);
+    } else {
+      content.innerHTML = `
+        <div style="padding: 60px 20px; text-align: center; color: var(--text-secondary);">
+          <div style="font-size: 48px; margin-bottom: 12px;">⚠️</div>
+          <div>${res.error || '加载失败'}</div>
+        </div>
+      `;
+    }
+  } catch (e) {
+    content.innerHTML = `
+      <div style="padding: 60px 20px; text-align: center; color: var(--text-secondary);">
+        <div style="font-size: 48px; margin-bottom: 12px;">⚠️</div>
+        <div>加载失败，请稍后重试</div>
+      </div>
+    `;
+    console.error('加载攻略详情失败:', e);
+  }
+}
+
+function closeGuideDetail() {
+  document.getElementById('guideDetailModal').classList.add('hidden');
+  currentDetailGuideId = null;
+}
+
+function renderGuideDetail(guide) {
+  const titleEl = document.getElementById('guideDetailTitle');
+  const content = document.getElementById('guideDetailContent');
+  const theme = getThemeInfo(guide.theme);
+  const creator = guide.creator || {};
+  const ratingStats = guide.rating_stats || {};
+  const hasRating = ratingStats.count > 0;
+
+  titleEl.textContent = guide.title;
+
+  let heroImageHtml = '';
+  if (guide.cover_image) {
+    heroImageHtml = `<img src="${guide.cover_image}" alt="${guide.title}">`;
+  } else {
+    heroImageHtml = `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:96px;">${theme.icon}</div>`;
+  }
+
+  let overviewHtml = `
+    <div class="guide-overview-grid">
+      <div class="guide-overview-card">
+        <div class="icon">👥</div>
+        <div class="num">${guide.participants_count || 0}</div>
+        <div class="label">参与人数</div>
+      </div>
+      <div class="guide-overview-card">
+        <div class="icon">❤️</div>
+        <div class="num">${guide.total_likes || 0}</div>
+        <div class="label">总点赞</div>
+      </div>
+      <div class="guide-overview-card">
+        <div class="icon">📸</div>
+        <div class="num">${guide.total_photos || 0}</div>
+        <div class="label">照片数量</div>
+      </div>
+      <div class="guide-overview-card">
+        <div class="icon">📍</div>
+        <div class="num">${(guide.checkin_points || []).length}</div>
+        <div class="label">打卡点数</div>
+      </div>
+      <div class="guide-overview-card">
+        <div class="icon">📝</div>
+        <div class="num">${(guide.notes || []).length}</div>
+        <div class="label">笔记数量</div>
+      </div>
+      ${hasRating ? `
+        <div class="guide-overview-card">
+          <div class="icon">⭐</div>
+          <div class="num" style="color:#f59e0b;">${ratingStats.avg_overall.toFixed(1)}</div>
+          <div class="label">评分 (${ratingStats.count}评)</div>
+        </div>
+      ` : ''}
+    </div>
+  `;
+
+  let descriptionHtml = guide.description ? `
+    <div class="guide-section">
+      <h3 class="guide-section-title"><span>📖</span> 攻略简介</h3>
+      <div class="guide-description">${guide.description}</div>
+    </div>
+  ` : '';
+
+  let checkinPointsHtml = '';
+  if (guide.checkin_points && guide.checkin_points.length > 0) {
+    checkinPointsHtml = `
+      <div class="guide-section">
+        <h3 class="guide-section-title"><span>📍</span> 打卡点路线</h3>
+        <div class="guide-checkin-list">
+          ${guide.checkin_points.map((cp, idx) => {
+            let photosHtml = '';
+            if (cp.photos && cp.photos.length > 0) {
+              photosHtml = `
+                <div class="guide-checkin-photos">
+                  ${cp.photos.map(p => `<img src="${p}" alt="${cp.name}" loading="lazy">`).join('')}
+                </div>
+              `;
+            }
+            return `
+              <div class="guide-checkin-point">
+                <div class="guide-checkin-header">
+                  <div class="guide-checkin-number">${idx + 1}</div>
+                  <div class="guide-checkin-name">${cp.name || '打卡点 ' + (idx + 1)}</div>
+                  ${cp.location ? `<div class="guide-checkin-location">📍 ${cp.location}</div>` : ''}
+                </div>
+                <div class="guide-checkin-body">
+                  ${cp.description ? `<div class="guide-checkin-desc">${cp.description}</div>` : ''}
+                  ${cp.collective_review ? `
+                    <div class="guide-checkin-review">
+                      <div class="guide-checkin-review-title">💬 大家的评价</div>
+                      <div>${cp.collective_review}</div>
+                    </div>
+                  ` : ''}
+                  ${cp.travel_tips ? `
+                    <div class="guide-checkin-tips">
+                      <div class="guide-checkin-tips-title">💡 出行贴士</div>
+                      <div>${cp.travel_tips}</div>
+                    </div>
+                  ` : ''}
+                  ${photosHtml}
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  let ratingHtml = '';
+  if (hasRating) {
+    ratingHtml = `
+      <div class="guide-section">
+        <h3 class="guide-section-title"><span>⭐</span> 评分与评价</h3>
+        <div class="guide-rating-summary">
+          <div class="guide-rating-total">
+            <div class="big-score">${ratingStats.avg_overall.toFixed(1)}</div>
+            <div class="stars">${renderStars(ratingStats.avg_overall)}</div>
+            <div class="count">${ratingStats.count} 位参与者评分</div>
+          </div>
+          <div class="guide-rating-details">
+            <div class="guide-rating-item">
+              <span class="label">路线设计</span>
+              <span class="score">${ratingStats.avg_route_design.toFixed(1)}</span>
+              <div class="bar"><div class="bar-fill" style="width:${(ratingStats.avg_route_design / 5 * 100).toFixed(0)}%;"></div></div>
+            </div>
+            <div class="guide-rating-item">
+              <span class="label">组织安排</span>
+              <span class="score">${ratingStats.avg_organization.toFixed(1)}</span>
+              <div class="bar"><div class="bar-fill" style="width:${(ratingStats.avg_organization / 5 * 100).toFixed(0)}%;"></div></div>
+            </div>
+            <div class="guide-rating-item">
+              <span class="label">搭子契合</span>
+              <span class="score">${ratingStats.avg_partner_fit.toFixed(1)}</span>
+              <div class="bar"><div class="bar-fill" style="width:${(ratingStats.avg_partner_fit / 5 * 100).toFixed(0)}%;"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  let photosHtml = '';
+  if (guide.activity_photos && guide.activity_photos.length > 0) {
+    photosHtml = `
+      <div class="guide-section">
+        <h3 class="guide-section-title"><span>📸</span> 活动照片 (${guide.activity_photos.length})</h3>
+        <div class="guide-activity-photos">
+          ${guide.activity_photos.map(p => `
+            <div class="guide-activity-photo">
+              <img src="${p.image_url}" alt="活动照片" loading="lazy">
+              <div class="guide-activity-photo-info">
+                <span>${p.uploader_avatar || '🧑'} ${p.uploader_name || '匿名'}</span>
+                <span>❤️ ${p.likes_count || 0}</span>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  let notesHtml = '';
+  if (guide.notes && guide.notes.length > 0) {
+    notesHtml = `
+      <div class="guide-section">
+        <h3 class="guide-section-title"><span>📝</span> 笔记与感想 (${guide.notes.length})</h3>
+        <div class="guide-notes-list">
+          ${guide.notes.map(n => `
+            <div class="guide-note">
+              <div class="guide-note-header">
+                <div class="guide-note-avatar">${n.author_avatar || '🧑'}</div>
+                <div class="guide-note-author">
+                  <div class="name">${n.author_name || '匿名用户'}</div>
+                  <div class="time">${n.created_at ? new Date(n.created_at).toLocaleString('zh-CN') : ''}</div>
+                </div>
+                <div class="guide-note-likes">❤️ ${n.likes || 0}</div>
+              </div>
+              <div class="guide-note-content">${n.content || ''}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  let creatorHtml = `
+    <div class="guide-section">
+      <h3 class="guide-section-title"><span>👤</span> 组织者</h3>
+      <div class="guide-creator-info">
+        <div class="guide-creator-avatar-lg">${creator.avatar || '🧑'}</div>
+        <div class="guide-creator-text">
+          <div class="name">${creator.username || '匿名用户'}</div>
+          <div class="role">路线组织者 · ${theme.icon} ${theme.name} · 📍 ${guide.city || '未知城市'}</div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  content.innerHTML = `
+    <div class="guide-detail-body">
+      <div class="guide-hero">
+        ${heroImageHtml}
+        <div class="guide-hero-overlay">
+          <h1>${guide.title}</h1>
+          <div class="guide-hero-meta">
+            <span>📍 ${guide.city || '未知城市'}</span>
+            <span style="color: ${theme.color};">${theme.icon} ${theme.name}</span>
+            ${guide.duration_hours ? `<span>⏱ ${guide.duration_hours} 小时</span>` : ''}
+            ${guide.meeting_point ? `<span>🅿️ ${guide.meeting_point}</span>` : ''}
+          </div>
+        </div>
+      </div>
+      <div class="guide-content-wrapper">
+        ${overviewHtml}
+        ${creatorHtml}
+        ${descriptionHtml}
+        ${checkinPointsHtml}
+        ${ratingHtml}
+        ${photosHtml}
+        ${notesHtml}
+      </div>
+    </div>
+  `;
+}
+
+let selectedSettingsAvatar = '';
+let selectedPreferredThemes = [];
+let settingsMinDuration = null;
+let settingsMaxDuration = null;
+
+function openSettingsModal() {
+  if (!currentUser) return;
+
+  selectedSettingsAvatar = currentUser.avatar || '🧑';
+  selectedPreferredThemes = currentUser.preferred_themes
+    ? currentUser.preferred_themes.split(',').filter(t => t)
+    : [];
+  settingsMinDuration = currentUser.preferred_min_duration
+    ? Number(currentUser.preferred_min_duration)
+    : null;
+  settingsMaxDuration = currentUser.preferred_max_duration
+    ? Number(currentUser.preferred_max_duration)
+    : null;
+
+  document.getElementById('settingsUsername').value = currentUser.username || '';
+  document.getElementById('settingsBio').value = currentUser.bio || '';
+  document.getElementById('settingsCity').value = currentUser.city || '';
+
+  renderAvatarPicker();
+  renderThemePicker();
+  renderDurationPicker();
+
+  switchSettingsTab('profile');
+
+  document.getElementById('settingsModal').classList.remove('hidden');
+}
+
+function closeSettingsModal() {
+  document.getElementById('settingsModal').classList.add('hidden');
+}
+
+function switchSettingsTab(tabName) {
+  document.querySelectorAll('.settings-tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === tabName);
+  });
+  document.querySelectorAll('.settings-tab-content').forEach(content => {
+    content.classList.toggle('active', content.id === `settings${tabName.charAt(0).toUpperCase() + tabName.slice(1)}Tab`);
+  });
+}
+
+function renderAvatarPicker() {
+  const container = document.getElementById('avatarPicker');
+  container.innerHTML = avatarPool.map(avatar => `
+    <div class="avatar-option ${selectedSettingsAvatar === avatar ? 'selected' : ''}" 
+         data-avatar="${avatar}"
+         onclick="selectAvatar('${avatar}')">
+      ${avatar}
+    </div>
+  `).join('');
+}
+
+function selectAvatar(avatar) {
+  selectedSettingsAvatar = avatar;
+  renderAvatarPicker();
+}
+
+function renderThemePicker() {
+  const container = document.getElementById('themePicker');
+  container.innerHTML = themes.map(theme => {
+    const isSelected = selectedPreferredThemes.includes(theme.id);
+    return `
+      <div class="theme-picker-item ${isSelected ? 'selected' : ''}" 
+           data-theme="${theme.id}"
+           onclick="togglePreferredTheme('${theme.id}')">
+        <span>${theme.icon}</span>
+        <span>${theme.name}</span>
+      </div>
+    `;
+  }).join('');
+}
+
+function togglePreferredTheme(themeId) {
+  const idx = selectedPreferredThemes.indexOf(themeId);
+  if (idx > -1) {
+    selectedPreferredThemes.splice(idx, 1);
+  } else {
+    selectedPreferredThemes.push(themeId);
+  }
+  renderThemePicker();
+}
+
+function renderDurationPicker() {
+  const minInput = document.getElementById('settingsMinDuration');
+  const maxInput = document.getElementById('settingsMaxDuration');
+
+  if (settingsMinDuration !== null) {
+    minInput.value = settingsMinDuration;
+  } else {
+    minInput.value = '';
+  }
+  if (settingsMaxDuration !== null) {
+    maxInput.value = settingsMaxDuration;
+  } else {
+    maxInput.value = '';
+  }
+
+  document.querySelectorAll('.duration-preset-btn').forEach(btn => {
+    const min = parseFloat(btn.dataset.min);
+    const max = parseFloat(btn.dataset.max);
+    const isActive = min === 0 && max === 0
+      ? settingsMinDuration === null && settingsMaxDuration === null
+      : settingsMinDuration === min && settingsMaxDuration === max;
+    btn.classList.toggle('active', isActive);
+  });
+}
+
+function setDurationPreset(min, max) {
+  if (min === 0 && max === 0) {
+    settingsMinDuration = null;
+    settingsMaxDuration = null;
+  } else {
+    settingsMinDuration = min;
+    settingsMaxDuration = max;
+  }
+  renderDurationPicker();
+}
+
+async function saveSettings() {
+  if (!currentUser) return;
+
+  const username = document.getElementById('settingsUsername').value.trim();
+  const bio = document.getElementById('settingsBio').value.trim();
+  const city = document.getElementById('settingsCity').value;
+
+  const minDurationVal = document.getElementById('settingsMinDuration').value;
+  const maxDurationVal = document.getElementById('settingsMaxDuration').value;
+
+  const minDuration = minDurationVal ? parseFloat(minDurationVal) : null;
+  const maxDuration = maxDurationVal ? parseFloat(maxDurationVal) : null;
+
+  if (!username) {
+    showToast('昵称不能为空', 'error');
+    return;
+  }
+
+  if (minDuration !== null && maxDuration !== null && minDuration > maxDuration) {
+    showToast('最小时长不能大于最大时长', 'error');
+    return;
+  }
+
+  try {
+    const res = await api(`${API}/users/${currentUser.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        username,
+        avatar: selectedSettingsAvatar,
+        bio,
+        city,
+        preferred_themes: selectedPreferredThemes.join(','),
+        preferred_min_duration: minDuration,
+        preferred_max_duration: maxDuration
+      })
+    });
+
+    if (res.success) {
+      currentUser = res.user;
+      saveUser(currentUser);
+
+      updateUserDisplay();
+      loadMyPlans();
+
+      closeSettingsModal();
+      showToast('设置保存成功！', 'success');
+
+      const activeTab = document.querySelector('.nav-btn.active')?.dataset.tab;
+      if (activeTab === 'match') {
+        loadMatchSuggestions();
+      } else if (activeTab === 'discover') {
+        refreshDiscoverView();
+      }
+    } else {
+      showToast(res.error || '保存失败', 'error');
+    }
+  } catch (e) {
+    showToast('保存失败，请重试', 'error');
+  }
+}
+
+function updateUserDisplay() {
+  if (!currentUser) return;
+
+  document.getElementById('userName').textContent = currentUser.username;
+  document.getElementById('userAvatar').textContent = currentUser.avatar || '🧑';
+  document.getElementById('profileName').textContent = currentUser.username;
+  document.getElementById('profileAvatar').textContent = currentUser.avatar || '🧑';
+  document.getElementById('profileBio').textContent = currentUser.bio || '这个人很懒，没有留下签名';
+  document.getElementById('profileCity').textContent = '📍 ' + (currentUser.city || '未知城市');
+}
+
+function initSettingsEvents() {
+  document.getElementById('settingsBtn').addEventListener('click', openSettingsModal);
+  document.getElementById('closeSettingsBtn').addEventListener('click', closeSettingsModal);
+  document.getElementById('cancelSettingsBtn').addEventListener('click', closeSettingsModal);
+  document.getElementById('saveSettingsBtn').addEventListener('click', saveSettings);
+
+  document.getElementById('settingsModal').addEventListener('click', (e) => {
+    if (e.target.id === 'settingsModal') closeSettingsModal();
+  });
+
+  document.querySelectorAll('.settings-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      switchSettingsTab(btn.dataset.tab);
+    });
+  });
+
+  document.querySelectorAll('.duration-preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const min = parseFloat(btn.dataset.min);
+      const max = parseFloat(btn.dataset.max);
+      setDurationPreset(min, max);
+    });
+  });
+
+  document.getElementById('settingsMinDuration').addEventListener('change', (e) => {
+    const val = e.target.value ? parseFloat(e.target.value) : null;
+    settingsMinDuration = val;
+    renderDurationPicker();
+  });
+
+  document.getElementById('settingsMaxDuration').addEventListener('change', (e) => {
+    const val = e.target.value ? parseFloat(e.target.value) : null;
+    settingsMaxDuration = val;
+    renderDurationPicker();
+  });
 }
 
 document.addEventListener('DOMContentLoaded', init);
